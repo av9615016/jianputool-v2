@@ -2,7 +2,7 @@
 # midi_to_musicxml_clean.py
 #
 # JianpuTool MVP 1.1
-# MIDI -> MusicXML Clean V3.1
+# MIDI -> MusicXML Clean V3.1.1
 #
 
 import sys
@@ -12,6 +12,7 @@ from music21 import converter
 from music21 import stream
 from music21 import meter
 from music21 import note
+from music21 import chord
 from music21 import tempo
 
 
@@ -22,30 +23,30 @@ OUTPUT = sys.argv[2]
 
 
 # =========================
-# 量化
+# 16分音符量化
 # =========================
 
 def quantize(value):
 
-    # 16分音符
     return round(value * 4) / 4
 
 
 
 # =========================
-# 自動選旋律
+# 自動選旋律軌
 # =========================
 
 def choose_melody(score):
 
-    best = None
+    best_part = None
     best_value = -1
 
 
     for part in score.parts:
 
+
         notes = list(
-            part.flat.notes
+            part.flatten().notes
         )
 
 
@@ -53,27 +54,73 @@ def choose_melody(score):
             continue
 
 
+
+        pitches = []
+
+
+        for n in notes:
+
+
+            if isinstance(
+                n,
+                note.Note
+            ):
+
+
+                pitches.append(
+                    n.pitch.midi
+                )
+
+
+            elif isinstance(
+                n,
+                chord.Chord
+            ):
+
+
+                pitches.append(
+                    max(
+                        p.midi
+                        for p in n.pitches
+                    )
+                )
+
+
+
+        if len(pitches)==0:
+            continue
+
+
+
+        avg_pitch = (
+            sum(pitches)
+            /
+            len(pitches)
+        )
+
+
+
         count = len(notes)
 
 
-        avg_pitch = sum(
-            n.pitch.midi
-            for n in notes
-        ) / count
-
 
         # 高音 + 音符數量
-        value = count + avg_pitch * 2
+        value = (
+            count
+            +
+            avg_pitch * 2
+        )
+
 
 
         if value > best_value:
 
             best_value = value
-            best = part
+            best_part = part
 
 
 
-    return best
+    return best_part
 
 
 
@@ -87,17 +134,51 @@ def remove_low_notes(part):
     result = stream.Part()
 
 
-    for n in part.flat.notes:
+
+    for n in part.flatten().notes:
 
 
-        if n.pitch.midi < 55:
-
-            continue
+        keep = True
 
 
-        result.append(
-            n
-        )
+
+        if isinstance(
+            n,
+            note.Note
+        ):
+
+
+            if n.pitch.midi < 55:
+
+                keep = False
+
+
+
+        elif isinstance(
+            n,
+            chord.Chord
+        ):
+
+
+            high = max(
+                p.midi
+                for p in n.pitches
+            )
+
+
+            if high < 55:
+
+                keep = False
+
+
+
+
+        if keep:
+
+            result.append(
+                n
+            )
+
 
 
     return result
@@ -106,7 +187,7 @@ def remove_low_notes(part):
 
 
 # =========================
-# 移除雜訊
+# 移除太短音
 # =========================
 
 def remove_noise(part):
@@ -114,17 +195,23 @@ def remove_noise(part):
     result = stream.Part()
 
 
-    for n in part.flat.notes:
+
+    for n in part.notes:
 
 
-        if n.duration.quarterLength < 0.15:
+        if (
+            n.duration.quarterLength
+            < 0.15
+        ):
 
             continue
+
 
 
         result.append(
             n
         )
+
 
 
     return result
@@ -133,7 +220,58 @@ def remove_noise(part):
 
 
 # =========================
-# 合併同時間重複音
+# 和弦取最高音
+# =========================
+
+def chord_to_note(part):
+
+    result = stream.Part()
+
+
+
+    for n in part.flatten().notes:
+
+
+        if isinstance(
+            n,
+            chord.Chord
+        ):
+
+
+            new_note = note.Note(
+                max(
+                    n.pitches
+                )
+            )
+
+
+            new_note.duration = (
+                copy.deepcopy(
+                    n.duration
+                )
+            )
+
+
+            result.append(
+                new_note
+            )
+
+
+        else:
+
+            result.append(
+                n
+            )
+
+
+
+    return result
+
+
+
+
+# =========================
+# 去除重複音
 # =========================
 
 def remove_duplicate_notes(part):
@@ -145,19 +283,35 @@ def remove_duplicate_notes(part):
     last_offset = -1
 
 
+
     for n in part.notes:
 
 
-        if (
-            n.pitch.midi == last_pitch
-            and
-            abs(n.offset-last_offset)<0.01
+        if not isinstance(
+            n,
+            note.Note
         ):
 
             continue
 
 
-        result.append(n)
+
+        if (
+            n.pitch.midi == last_pitch
+            and
+            abs(
+                n.offset-last_offset
+            )
+            <0.01
+        ):
+
+            continue
+
+
+
+        result.append(
+            n
+        )
 
 
         last_pitch = n.pitch.midi
@@ -171,7 +325,7 @@ def remove_duplicate_notes(part):
 
 
 # =========================
-# 修正小節
+# 重建4/4小節
 # =========================
 
 def rebuild_measure(part):
@@ -180,17 +334,21 @@ def rebuild_measure(part):
 
 
     result.append(
-        meter.TimeSignature("4/4")
+        meter.TimeSignature(
+            "4/4"
+        )
     )
 
 
     current = 0
 
 
-    for n in part.flat.notes:
+
+    for n in part.notes:
 
 
         obj = copy.deepcopy(n)
+
 
 
         dur = quantize(
@@ -198,8 +356,10 @@ def rebuild_measure(part):
         )
 
 
-        if dur <= 0:
+
+        if dur <=0:
             continue
+
 
 
         obj.duration.quarterLength = dur
@@ -217,16 +377,20 @@ def rebuild_measure(part):
             )
 
 
-            if rest.duration.quarterLength > 0:
+            if rest.duration.quarterLength >0:
 
-                result.append(rest)
-
-
-            current = 0
-
+                result.append(
+                    rest
+                )
 
 
-        result.append(obj)
+            current=0
+
+
+
+        result.append(
+            obj
+        )
 
 
         current += dur
@@ -240,16 +404,18 @@ def rebuild_measure(part):
 
 
 
-    # 補尾端
-
     if current>0:
 
 
         rest = note.Rest()
 
-        rest.duration.quarterLength = 4-current
+        rest.duration.quarterLength = (
+            4-current
+        )
 
-        result.append(rest)
+        result.append(
+            rest
+        )
 
 
 
@@ -259,7 +425,7 @@ def rebuild_measure(part):
 
 
 # =========================
-# 主程式
+# Main
 # =========================
 
 def main():
@@ -283,36 +449,53 @@ def main():
     if part is None:
 
         raise Exception(
-            "找不到旋律"
+            "沒有找到音符"
         )
 
 
 
     print("移除低音")
 
-    part = remove_low_notes(part)
+    part = remove_low_notes(
+        part
+    )
+
+
+
+    print("和弦轉單音")
+
+    part = chord_to_note(
+        part
+    )
 
 
 
     print("移除雜訊")
 
-    part = remove_noise(part)
+    part = remove_noise(
+        part
+    )
 
 
 
     print("去除重複音")
 
-    part = remove_duplicate_notes(part)
+    part = remove_duplicate_notes(
+        part
+    )
 
 
 
     print("重建小節")
 
-    part = rebuild_measure(part)
+    part = rebuild_measure(
+        part
+    )
 
 
 
     output = stream.Score()
+
 
 
     output.append(
@@ -320,6 +503,7 @@ def main():
             number=84
         )
     )
+
 
 
     output.append(
@@ -330,16 +514,19 @@ def main():
 
     print("輸出 MusicXML")
 
+
     output.write(
         "musicxml",
         fp=OUTPUT
     )
 
 
+
     print(
         "完成:",
         OUTPUT
     )
+
 
 
 
