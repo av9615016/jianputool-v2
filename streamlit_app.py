@@ -242,6 +242,10 @@ if uploaded:
             musicxml = os.path.join(
                 work,
                 "raw.musicxml"
+                "output.musicxml",
+                "melody.musicxml",
+                "fixed.musicxml",
+]
             )
 
 
