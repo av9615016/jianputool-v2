@@ -327,19 +327,37 @@ if uploaded:
 
 
 
-            ly_file = os.path.splitext(
-                final_xml
-            )[0] + ".ly"
+           # ==========================
+# 找 jianpu-ly 產生的 ly
+# ==========================
+
+ly_file = None
 
 
+for root, dirs, files in os.walk(BASE_DIR):
 
-            if not os.path.exists(
-                ly_file
-            ):
+    for f in files:
 
-                raise Exception(
-                    f"找不到 {ly_file}"
-                )
+        if f.endswith(".ly") and uid in f:
+
+            ly_file = os.path.join(
+                root,
+                f
+            )
+
+            break
+
+
+            if ly_file is None:
+
+            raise Exception(
+            "找不到 jianpu-ly 產生的 .ly"
+            )
+
+
+            st.success(
+            f"找到簡譜檔案: {ly_file}"
+            )
 
 
 
