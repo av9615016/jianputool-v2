@@ -2,8 +2,8 @@ import streamlit as st
 import os
 import uuid
 import subprocess
-import shutil
 import sys
+import shutil
 
 
 st.set_page_config(
@@ -14,20 +14,36 @@ st.set_page_config(
 
 st.title("🎵 JianpuTool MVP 1.1")
 
-st.write("""
-MP3 / WAV / MIDI → 主旋律 → MusicXML → 數字簡譜 PDF
 
-支援：
-- MP3
-- WAV
-- MIDI
-""")
+st.write(
+"""
+MP3 / WAV / MIDI
+
+↓
+
+主旋律分析
+
+↓
+
+MusicXML
+
+↓
+
+數字簡譜 PDF
+"""
+)
 
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR=os.path.dirname(
+    os.path.abspath(__file__)
+)
 
 
-OUTPUT_DIR = os.path.join(BASE_DIR,"outputs")
+OUTPUT_DIR=os.path.join(
+    BASE_DIR,
+    "outputs"
+)
+
 
 os.makedirs(
     OUTPUT_DIR,
@@ -38,27 +54,36 @@ os.makedirs(
 
 def run_cmd(cmd):
 
-    st.code(" ".join(cmd))
+    st.code(
+        " ".join(cmd)
+    )
 
-    result = subprocess.run(
+
+    result=subprocess.run(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True
     )
 
-    st.text(result.stdout)
+
+    st.text(
+        result.stdout
+    )
 
 
-    if result.returncode != 0:
+    if result.returncode !=0:
+
         raise Exception(
             result.stdout
         )
 
 
 
-uploaded = st.file_uploader(
-    "上傳音樂檔",
+
+
+upload=st.file_uploader(
+    "上傳音樂",
     type=[
         "mp3",
         "wav",
@@ -69,21 +94,22 @@ uploaded = st.file_uploader(
 
 
 
-if uploaded:
+if upload:
 
 
-    job_id = str(uuid.uuid4())[:8]
+    job=str(uuid.uuid4())[:8]
 
 
-    input_file = os.path.join(
+    input_file=os.path.join(
         OUTPUT_DIR,
-        uploaded.name
+        upload.name
     )
 
 
     with open(input_file,"wb") as f:
+
         f.write(
-            uploaded.getbuffer()
+            upload.getbuffer()
         )
 
 
@@ -92,26 +118,30 @@ if uploaded:
     )
 
 
-    ext = uploaded.name.lower().split(".")[-1]
+    ext=upload.name.lower().split(".")[-1]
 
 
     try:
 
 
-        #
-        # STEP 1
-        #
-        if ext in ["mp3","wav"]:
+        # =====================
+        # 1. Audio → MIDI
+        # =====================
+
+        if ext in [
+            "mp3",
+            "wav"
+        ]:
 
 
             st.info(
-                "🎤 BasicPitch 分析旋律..."
+                "🎤 BasicPitch 分析旋律"
             )
 
 
-            midi_file = os.path.join(
+            midi_file=os.path.join(
                 OUTPUT_DIR,
-                f"{job_id}.mid"
+                f"{job}.mid"
             )
 
 
@@ -127,6 +157,7 @@ if uploaded:
 
         else:
 
+
             st.info(
                 "🎹 使用 MIDI"
             )
@@ -136,25 +167,19 @@ if uploaded:
 
 
 
-        if not os.path.exists(midi_file):
 
-            raise Exception(
-                "MIDI產生失敗"
-            )
+        # =====================
+        # 2. MIDI → MusicXML
+        # =====================
 
-
-
-        #
-        # STEP 2
-        #
         st.info(
-            "🎼 MIDI → MusicXML"
+            "🎼 MIDI轉MusicXML"
         )
 
 
         raw_xml=os.path.join(
             OUTPUT_DIR,
-            f"{job_id}_raw.musicxml"
+            f"{job}_raw.musicxml"
         )
 
 
@@ -169,17 +194,20 @@ if uploaded:
 
 
 
-        #
-        # STEP 3
-        #
+
+        # =====================
+        # 3. Clean MusicXML
+        # =====================
+
+
         st.info(
-            "🧹 清理 MusicXML"
+            "🧹 清理MusicXML"
         )
 
 
         clean_xml=os.path.join(
             OUTPUT_DIR,
-            f"{job_id}_clean.musicxml"
+            f"{job}_clean.musicxml"
         )
 
 
@@ -194,17 +222,21 @@ if uploaded:
 
 
 
-        #
-        # STEP 4
-        #
+
+
+        # =====================
+        # 4. Fix Measure
+        # =====================
+
+
         st.info(
-            "🎵 修正簡譜格式"
+            "🔧 修正節拍"
         )
 
 
         final_xml=os.path.join(
             OUTPUT_DIR,
-            f"{job_id}_final.musicxml"
+            f"{job}_final.musicxml"
         )
 
 
@@ -219,17 +251,36 @@ if uploaded:
 
 
 
-        #
-        # STEP 5
-        #
+
+        # =====================
+        # 5. Check Measure
+        # =====================
+
+
         st.info(
-            "🔢 產生 Jianpu LilyPond"
+            "📏 檢查小節"
         )
 
 
-        ly_file=os.path.join(
-            OUTPUT_DIR,
-            f"{job_id}.ly"
+        run_cmd(
+            [
+                sys.executable,
+                "check_measure.py",
+                final_xml
+            ]
+        )
+
+
+
+
+
+        # =====================
+        # 6. Jianpu LY
+        # =====================
+
+
+        st.info(
+            "🔢 產生 Jianpu LilyPond"
         )
 
 
@@ -243,26 +294,21 @@ if uploaded:
         )
 
 
-        generated_ly = final_xml.replace(
+
+        ly_file=final_xml.replace(
             ".musicxml",
             ".ly"
         )
 
 
-        if os.path.exists(generated_ly):
 
-            shutil.move(
-                generated_ly,
-                ly_file
-            )
+        # =====================
+        # 7. LilyPond PDF
+        # =====================
 
 
-
-        #
-        # STEP 6
-        #
         st.info(
-            "📄 LilyPond 產生 PDF"
+            "📄 LilyPond產生PDF"
         )
 
 
@@ -277,7 +323,7 @@ if uploaded:
 
 
 
-        pdf_file = ly_file.replace(
+        pdf_file=ly_file.replace(
             ".ly",
             ".pdf"
         )
@@ -286,15 +332,17 @@ if uploaded:
 
         if os.path.exists(pdf_file):
 
+
             st.success(
-                "🎉 完成！簡譜PDF產生成功"
+                "🎉 完成"
             )
 
 
             with open(pdf_file,"rb") as f:
 
+
                 st.download_button(
-                    "下載簡譜 PDF",
+                    "下載簡譜PDF",
                     f,
                     file_name=
                     os.path.basename(pdf_file)
@@ -303,8 +351,9 @@ if uploaded:
 
         else:
 
+
             st.error(
-                "PDF沒有產生"
+                "PDF產生失敗"
             )
 
 
@@ -313,7 +362,8 @@ if uploaded:
 
 
         st.error(
-            "錯誤:"
+            "轉換錯誤"
         )
+
 
         st.exception(e)
