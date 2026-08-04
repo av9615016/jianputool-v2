@@ -65,7 +65,7 @@ os.makedirs(
 
 
 # ==========================
-# Command
+# Run command
 # ==========================
 
 def run_cmd(cmd):
@@ -99,11 +99,48 @@ def run_cmd(cmd):
 
 
 # ==========================
+# 清理舊檔
+# ==========================
+
+def clean_outputs():
+
+
+    for f in os.listdir(
+        OUTPUT_DIR
+    ):
+
+        path = os.path.join(
+            OUTPUT_DIR,
+            f
+        )
+
+
+        if (
+            f.endswith(".ly")
+            or f.endswith(".pdf")
+            or f.endswith(".musicxml")
+        ):
+
+
+            if os.path.isfile(path):
+
+                os.remove(path)
+
+
+            elif os.path.isdir(path):
+
+                shutil.rmtree(path)
+
+
+
+# ==========================
 # 找 LY
 # ==========================
 
 def find_generated_ly(uid):
 
+
+    # 優先找本次
 
     target = os.path.join(
         OUTPUT_DIR,
@@ -111,23 +148,25 @@ def find_generated_ly(uid):
     )
 
 
-    if os.path.exists(target):
+    if os.path.isfile(target):
 
         return target
 
 
 
-    # 備用搜尋
-
     latest = None
     latest_time = 0
 
 
-    for root, dirs, files in os.walk(BASE_DIR):
+
+    for root, dirs, files in os.walk(
+        BASE_DIR
+    ):
 
         for f in files:
 
             if f.endswith(".ly"):
+
 
                 path = os.path.join(
                     root,
@@ -148,7 +187,6 @@ def find_generated_ly(uid):
 
 
     return latest
-
 
 
 
@@ -204,38 +242,15 @@ if uploaded:
         try:
 
 
-            # ======================
-            # 清除舊輸出
-            # ======================
+            # 清除舊檔
 
-            for f in os.listdir(
-                OUTPUT_DIR
-            ):
-
-                if (
-                    f.endswith(".ly")
-                    or f.endswith(".pdf")
-                    or f.endswith(".musicxml")
-                ):
-
-                   path = os.path.join(
-                   OUTPUT_DIR,
-                   f
-                   )
-
-                   if os.path.isfile(path):
-
-                   os.remove(path)
-
-                   elif os.path.isdir(path):
-
-                   shutil.rmtree(path)
+            clean_outputs()
 
 
 
-            # ======================
+            # ==================
             # MIDI
-            # ======================
+            # ==================
 
             if uploaded.name.lower().endswith(
                 (
@@ -274,7 +289,7 @@ if uploaded:
 
 
 
-            if not os.path.exists(
+            if not os.path.isfile(
                 midi_file
             ):
 
@@ -284,9 +299,9 @@ if uploaded:
 
 
 
-            # ======================
+            # ==================
             # MIDI → MusicXML
-            # ======================
+            # ==================
 
             raw_xml = os.path.join(
                 OUTPUT_DIR,
@@ -305,9 +320,9 @@ if uploaded:
 
 
 
-            # ======================
+            # ==================
             # Clean
-            # ======================
+            # ==================
 
             clean_xml = os.path.join(
                 OUTPUT_DIR,
@@ -326,9 +341,9 @@ if uploaded:
 
 
 
-            # ======================
-            # Fix Jianpu
-            # ======================
+            # ==================
+            # Fix
+            # ==================
 
             final_xml = os.path.join(
                 OUTPUT_DIR,
@@ -347,9 +362,9 @@ if uploaded:
 
 
 
-            # ======================
-            # MusicXML → LY
-            # ======================
+            # ==================
+            # jianpu-ly
+            # ==================
 
             st.info(
                 "🎹 MusicXML → Jianpu"
@@ -372,13 +387,11 @@ if uploaded:
             )
 
 
-
             if ly_file is None:
 
                 raise Exception(
                     "找不到 jianpu-ly 產生的 ly"
                 )
-
 
 
             st.success(
@@ -387,9 +400,9 @@ if uploaded:
 
 
 
-            # ======================
+            # ==================
             # LilyPond
-            # ======================
+            # ==================
 
             st.info(
                 "📄 LilyPond PDF"
@@ -413,7 +426,7 @@ if uploaded:
 
 
 
-            if not os.path.exists(
+            if not os.path.isfile(
                 pdf_file
             ):
 
@@ -426,7 +439,6 @@ if uploaded:
             st.success(
                 "🎉 簡譜完成!"
             )
-
 
 
             with open(
@@ -469,4 +481,13 @@ with st.expander(
         OUTPUT_DIR
     ):
 
-        st.write(f)
+        path = os.path.join(
+            OUTPUT_DIR,
+            f
+        )
+
+
+        st.write(
+            f,
+            "📁資料夾" if os.path.isdir(path) else "📄檔案"
+        )
