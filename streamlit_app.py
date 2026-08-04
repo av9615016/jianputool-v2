@@ -104,7 +104,23 @@ def run_cmd(cmd):
 
 def find_generated_ly(uid):
 
-    candidates = []
+    ly_file = os.path.join(
+        OUTPUT_DIR,
+        f"{uid}_final.ly"
+    )
+
+
+    if os.path.exists(
+        ly_file
+    ):
+
+        return ly_file
+
+
+    # 備用：找最新 ly
+
+    latest = None
+    latest_time = 0
 
 
     for root, dirs, files in os.walk(BASE_DIR):
@@ -118,36 +134,17 @@ def find_generated_ly(uid):
                     f
                 )
 
-                candidates.append(
+                t = os.path.getmtime(
                     path
                 )
 
+                if t > latest_time:
 
-    if len(candidates) == 0:
-
-        return None
-
-
-
-    # 優先找 final.ly
-
-    for f in candidates:
-
-        if "final" in f:
-
-            return f
+                    latest_time = t
+                    latest = path
 
 
-
-    # 如果沒有 final，找最新產生的 ly
-
-    candidates.sort(
-        key=os.path.getmtime,
-        reverse=True
-    )
-
-
-    return candidates[0]
+    return latest
 
 
 
@@ -156,7 +153,7 @@ def find_generated_ly(uid):
 # ==========================
 
 uploaded = st.file_uploader(
-    "上傳 MP3 / WAV / MIDI",
+    "上傳 MP3 / WAV    "開始轉換 MIDI",
     type=[
         "mp3",
         "wav",
@@ -196,12 +193,28 @@ if uploaded:
 
 
     if st.button(
-        "開始轉換 🎵"
-    ):
+    "開始轉換 🎵"
+):
 
 
-        try:
+    # 清除舊輸出，避免抓到上一首
 
+    for f in os.listdir(OUTPUT_DIR):
+
+        if (
+            f.endswith(".ly")
+            or f.endswith(".pdf")
+        ):
+
+            os.remove(
+                os.path.join(
+                    OUTPUT_DIR,
+                    f
+                )
+            )
+
+
+    try:
 
             # ==================
             # Audio / MIDI
