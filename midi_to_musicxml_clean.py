@@ -2,7 +2,7 @@
 #
 # JianpuTool
 # MIDI -> MusicXML
-# V20.2 SAFE SCORE ENGINE
+# V20.3 Jianpu Safe Pitch Engine
 
 
 import sys
@@ -13,7 +13,9 @@ from music21 import (
     note,
     meter,
     tempo,
-    duration
+    duration,
+    clef,
+    key
 )
 
 
@@ -22,22 +24,23 @@ OUTPUT = sys.argv[2]
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V20.2")
+print(" MIDI TO MUSICXML CLEAN V20.3")
+print(" Jianpu Safe Pitch Engine")
 print("==============================")
 
 
 # =========================
-# LOAD MIDI
+# LOAD
 # =========================
 
 print("讀取 MIDI...")
 
-midi_score = converter.parse(INPUT)
+src_score = converter.parse(INPUT)
 
 
 
 # =========================
-# SELECT MELODY PART
+# SELECT PART
 # =========================
 
 print("選擇旋律軌...")
@@ -47,27 +50,25 @@ best_part = None
 best_count = 0
 
 
-for part in midi_score.parts:
+for p in src_score.parts:
 
-    count = 0
+    c = 0
 
-    for n in part.recurse().notes:
+    for n in p.recurse().notes:
 
         if isinstance(n, note.Note):
-            count += 1
+            c += 1
 
 
-    if count > best_count:
-
-        best_count = count
-        best_part = part
+    if c > best_count:
+        best_count = c
+        best_part = p
 
 
 
 if best_part is None:
-
     raise Exception(
-        "找不到旋律"
+        "找不到音符"
     )
 
 
@@ -79,15 +80,15 @@ print(
 
 
 # =========================
-# CREATE MELODY PART
+# BUILD PART
 # =========================
 
 melody = stream.Part()
 
-
 melody.partName = "Melody"
 
 
+# 音樂資訊
 
 melody.insert(
     0,
@@ -103,6 +104,18 @@ melody.insert(
 )
 
 
+melody.insert(
+    0,
+    clef.TrebleClef()
+)
+
+
+melody.insert(
+    0,
+    key.Key("C")
+)
+
+
 
 count = 0
 
@@ -115,19 +128,20 @@ for n in best_part.recurse().notes:
         continue
 
 
+    midi_num = n.pitch.midi
 
-    midi = n.pitch.midi
 
-
-    # 去除低音
-    if midi < 48:
+    # 去除極低雜訊
+    if midi_num < 48:
         continue
 
 
 
-    new_note = note.Note(
-        n.pitch
-    )
+    new_n = note.Note()
+
+
+    # 保留原 MIDI pitch
+    new_n.pitch.midi = midi_num
 
 
 
@@ -140,38 +154,40 @@ for n in best_part.recurse().notes:
         continue
 
 
-
     if ql > 4:
         ql = 4
 
 
 
-    # 節奏量化
+    # 比 V20.2 保留更多節奏
+
     allowed = [
 
         4,
         2,
         1,
+        0.75,
         0.5,
-        0.25
+        0.25,
+        0.125
 
     ]
 
 
-    ql = min(
+    closest = min(
         allowed,
         key=lambda x:
         abs(x - ql)
     )
 
 
-    new_note.duration = duration.Duration(
-        ql
+    new_n.duration = duration.Duration(
+        closest
     )
 
 
     melody.append(
-        new_note
+        new_n
     )
 
 
@@ -187,36 +203,26 @@ print(
 
 
 # =========================
-# OCTAVE LIMIT
+# PITCH CHECK
 # =========================
 
-print(
-    "限制音域..."
-)
+print("================")
+print("Pitch Check")
+print("================")
 
 
 for n in melody.notes:
 
-
-    if n.pitch.octave < 3:
-
-        n.pitch.octave = 3
-
-
-    if n.pitch.octave > 6:
-
-        n.pitch.octave = 6
-
+    print(
+        n.pitch,
+        n.pitch.midi
+    )
 
 
 
 # =========================
-# SCORE BUILD
+# BUILD SCORE
 # =========================
-
-print(
-    "建立 Score..."
-)
 
 
 score_out = stream.Score()
@@ -229,7 +235,7 @@ score_out.append(
 
 
 # =========================
-# MEASURE BUILD
+# MAKE MEASURES
 # =========================
 
 print(
@@ -244,24 +250,24 @@ final_score = score_out.makeMeasures(
 
 
 # =========================
-# CHECK MEASURE
+# MEASURE CHECK
 # =========================
 
 print(
-    "檢查小節..."
+    "Measure Check"
 )
 
 
-for part in final_score.parts:
+for p in final_score.parts:
 
-    for m in part.getElementsByClass(
+    for m in p.getElementsByClass(
         "Measure"
     ):
 
         print(
             "Measure",
             m.number,
-            "duration=",
+            "=",
             m.duration.quarterLength
         )
 
@@ -282,10 +288,10 @@ final_score.write(
 )
 
 
-
 print(
     "完成:",
     OUTPUT
 )
+
 
 print("==============================")
