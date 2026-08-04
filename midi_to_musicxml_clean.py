@@ -1,275 +1,155 @@
+# midi_to_musicxml_clean.py
+#
+# MIDI -> MusicXML
+# JianpuTool MVP 1.1
+
+
 import sys
-from music21 import converter, stream, note, chord, meter, tempo
+from music21 import converter
+from music21 import stream
+from music21 import meter
+from music21 import tempo
+from music21 import key
 
 
-INPUT = sys.argv[1]
-OUTPUT = sys.argv[2]
+def quantize(value):
 
+    # 16分音符量化
 
-print("MIDI CLEAN v10")
+    return round(value * 4) / 4
 
 
-# =========================
-# LOAD MIDI
-# =========================
 
-print("LOAD MIDI")
-
-score = converter.parse(INPUT)
-
-
-part = score.parts[0]
-
-
-# =========================
-# REMOVE CHORDS
-# =========================
-
-print("remove chords")
-
-
-new_part = stream.Part()
-
-
-for el in part.flatten().notesAndRests:
-
-    if isinstance(el, chord.Chord):
-
-        n = note.Note(
-            el.pitches[-1]
-        )
-
-        n.duration = el.duration
-
-        new_part.append(n)
-
-    else:
-
-        new_part.append(el)
-
-
-
-# =========================
-# REMOVE OVERLAPS
-# =========================
-
-print("remove overlaps")
-
-
-notes = list(new_part.notes)
-
-notes.sort(
-    key=lambda x:x.offset
-)
-
-
-last_end = 0
-
-
-for n in notes:
-
-    if n.offset < last_end:
-
-        n.offset = last_end
-
-
-    last_end = (
-        n.offset +
-        n.duration.quarterLength
-    )
-
-
-
-# =========================
-# QUANTIZE
-# =========================
-
-print("duration quantize")
-
-
-allowed = [
-    4,
-    2,
-    1,
-    0.5,
-    0.25,
-    0.125
-]
-
-
-for n in new_part.notes:
-
-    d = float(
-        n.duration.quarterLength
-    )
-
-    closest = min(
-        allowed,
-        key=lambda x:abs(x-d)
-    )
-
-    n.duration.quarterLength = closest
-
-
-
-# =========================
-# FORCE 4/4
-# =========================
-
-print("force 4/4")
-
-
-new_part.insert(
-    0,
-    meter.TimeSignature("4/4")
-)
-
-
-new_part.insert(
-    0,
-    tempo.MetronomeMark(
-        number=80
-    )
-)
-
-
-
-# =========================
-# MAKE MEASURES
-# =========================
-
-print("rebuild measures")
-
-
-measures = new_part.makeMeasures(
-    inPlace=False
-)
-
-
-
-# =========================
-# FIX MEASURES
-# =========================
-
-print("fix measures")
-
-
-fixed = stream.Part()
-
-
-for meas in measures.getElementsByClass(
-    "Measure"
+def convert_midi(
+    midi_file,
+    output_file
 ):
 
-    length = meas.duration.quarterLength
+
+    print("讀取 MIDI:")
+    print(midi_file)
 
 
-    print(
-        "Measure",
-        meas.number,
-        length
+    score = converter.parse(
+        midi_file
     )
 
 
-    # -----------------
-    # overflow
-    # -----------------
+    new_score = stream.Score()
 
-    if length > 4:
 
-        print(
-            "fix overflow",
-            meas.number
+
+    for part in score.parts:
+
+
+        new_part = stream.Part()
+
+
+        # 強制4/4
+
+        new_part.append(
+            meter.TimeSignature("4/4")
         )
 
 
-        # 不刪音，避免無限迴圈
-        while meas.duration.quarterLength > 4:
+        # 保留速度
 
-            if len(meas.notes) == 0:
-                break
+        tempos = part.recurse().getElementsByClass(
+            tempo.MetronomeMark
+        )
 
+        for t in tempos:
 
-            last = meas.notes[-1]
-
-
-            old = last.duration.quarterLength
+            new_part.append(t)
 
 
-            last.duration.quarterLength = max(
-                0.25,
-                old - 0.25
+
+        # 重新插入音符
+
+        for n in part.flatten().notesAndRests:
+
+
+            item = n.clone()
+
+
+            # 修正開始位置
+
+            item.offset = quantize(
+                n.offset
             )
 
 
-            # 如果沒有變化，跳出
-            if (
-                last.duration.quarterLength
-                ==
-                old
-            ):
-                break
+            # 修正長度
+
+            length = quantize(
+                n.duration.quarterLength
+            )
+
+
+            if length <= 0:
+
+                length = 0.25
+
+
+            item.duration.quarterLength = length
+
+
+            new_part.insert(
+                item.offset,
+                item
+            )
 
 
 
-    # -----------------
-    # fill rest
-    # -----------------
+        # 重新建立小節
 
-    length = meas.duration.quarterLength
-
-
-    if length < 4:
-
-        r = note.Rest()
-
-        r.duration.quarterLength = (
-            4 - length
+        new_part.makeMeasures(
+            inPlace=True
         )
 
-        meas.append(r)
+
+        new_score.append(
+            new_part
+        )
 
 
 
-    fixed.append(meas)
+    # 輸出 MusicXML
 
+    new_score.write(
+        "musicxml",
+        fp=output_file
+    )
 
-
-# =========================
-# FINAL CHECK
-# =========================
-
-print("FINAL CHECK")
-
-
-for meas in fixed.getElementsByClass(
-    "Measure"
-):
 
     print(
-        "Measure",
-        meas.number,
-        round(
-            meas.duration.quarterLength,
-            3
-        )
+        "MusicXML OK:"
+    )
+
+    print(
+        output_file
     )
 
 
 
-# =========================
-# WRITE
-# =========================
-
-print("FINAL WRITE")
+if __name__ == "__main__":
 
 
-fixed.write(
-    "musicxml",
-    fp=OUTPUT
-)
+    if len(sys.argv) < 3:
+
+        print(
+            "使用方式:"
+        )
+
+        print(
+            "python midi_to_musicxml_clean.py input.mid output.musicxml"
+        )
+
+        sys.exit(1)
 
 
-print("DONE")
 
-print(OUTPUT)
+    convert_midi(
+        sys.argv[1],
+        sys.argv[2]
+    )
