@@ -16,10 +16,56 @@ from music21 import tempo
 
 def quantize(value):
 
-    # 16分音符網格
-    return round(
-        value * 4
-    ) / 4
+    # 16分音符量化
+
+    return round(value * 4) / 4
+
+
+
+def fix_measures(part):
+
+    """
+    修正超過4拍的小節
+    """
+
+    for m in part.getElementsByClass("Measure"):
+
+
+        total = sum(
+            n.duration.quarterLength
+            for n in m.notesAndRests
+        )
+
+
+        if total > 4.0:
+
+
+            diff = total - 4.0
+
+
+            notes = list(
+                m.notesAndRests
+            )
+
+
+            if notes:
+
+
+                last = notes[-1]
+
+
+                new_length = (
+                    last.duration.quarterLength
+                    - diff
+                )
+
+
+                if new_length > 0:
+
+                    last.duration.quarterLength = (
+                        new_length
+                    )
+
 
 
 
@@ -28,13 +74,16 @@ def convert_midi(
     output_file
 ):
 
+
     print("讀取 MIDI:")
     print(midi_file)
+
 
 
     score = converter.parse(
         midi_file
     )
+
 
 
     new_score = stream.Score()
@@ -44,11 +93,12 @@ def convert_midi(
     for part in score.parts:
 
 
+
         new_part = stream.Part()
 
 
 
-        # 強制 4/4
+        # 強制4/4
 
         new_part.append(
             meter.TimeSignature("4/4")
@@ -68,7 +118,7 @@ def convert_midi(
 
 
 
-        # 處理音符
+        # 複製音符
 
         for n in part.flatten().notesAndRests:
 
@@ -77,7 +127,7 @@ def convert_midi(
 
 
 
-            # 修正 offset
+            # offset量化
 
             item.offset = quantize(
                 n.offset
@@ -85,11 +135,12 @@ def convert_midi(
 
 
 
-            # 修正 duration
+            # duration量化
 
             length = quantize(
                 n.duration.quarterLength
             )
+
 
 
             if length <= 0:
@@ -109,11 +160,20 @@ def convert_midi(
 
 
 
-        # 重新建立小節
+        # 建立小節
 
         new_part.makeMeasures(
             inPlace=True
         )
+
+
+
+        # 修正超長小節
+
+        fix_measures(
+            new_part
+        )
+
 
 
         new_score.append(
@@ -122,12 +182,19 @@ def convert_midi(
 
 
 
-    # 輸出 MusicXML
+    # 最後重新建立小節
+
+    new_score.makeMeasures(
+        inPlace=True
+    )
+
+
 
     new_score.write(
         "musicxml",
         fp=output_file
     )
+
 
 
     print(
