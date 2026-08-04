@@ -14,7 +14,7 @@ INPUT = sys.argv[1]
 OUTPUT = sys.argv[2]
 
 
-print("===== V17 SAFE REBUILD ENGINE =====")
+print("===== V18 SAFE REBUILD ENGINE =====")
 
 
 # =========================
@@ -26,15 +26,26 @@ print("load musicxml")
 score = converter.parse(INPUT)
 
 
+
+# =========================
+# CREATE NEW SCORE
+# =========================
+
+new_score = stream.Score()
+
+
+
 # =========================
 # EXTRACT MELODY
 # =========================
 
 print("extract melody")
 
+
 src = score.parts[0]
 
 melody = stream.Part()
+
 
 count = 0
 
@@ -43,39 +54,37 @@ for n in src.recurse().notes:
 
     if isinstance(n, note.Note):
 
-        new_n = note.Note(n.pitch)
+        new_n = note.Note(
+            n.pitch
+        )
 
 
-        ql = float(n.duration.quarterLength)
+        ql = float(
+            n.duration.quarterLength
+        )
 
 
-        # 移除非法 duration
         if ql <= 0:
             continue
 
 
-        # 限制最大長音
         if ql > 4:
             ql = 4
 
 
-        # =========================
-        # QUANTIZE DURATION
-        # =========================
 
         allowed = [
             4,
             2,
             1,
             0.5,
-            0.25,
-            0.125
+            0.25
         ]
 
 
         closest = min(
             allowed,
-            key=lambda x: abs(x - ql)
+            key=lambda x: abs(x-ql)
         )
 
 
@@ -84,7 +93,10 @@ for n in src.recurse().notes:
         )
 
 
-        melody.append(new_n)
+        melody.append(
+            new_n
+        )
+
 
         count += 1
 
@@ -98,30 +110,33 @@ print(
 
 
 # =========================
-# FIX OCTAVE
+# OCTAVE FIX
 # =========================
 
-print("limit octave")
+print(
+    "limit octave"
+)
 
 
 for n in melody.recurse().notes:
 
     if n.pitch.octave < 2:
-
         n.pitch.octave = 2
 
 
     if n.pitch.octave > 6:
-
         n.pitch.octave = 6
 
 
 
+
 # =========================
-# FORCE 4/4
+# HEADER
 # =========================
 
-print("force 4/4")
+print(
+    "force 4/4"
+)
 
 
 melody.insert(
@@ -140,41 +155,23 @@ melody.insert(
 
 
 # =========================
-# REBUILD MEASURES
+# MEASURE
 # =========================
 
 print(
-    "rebuild measures SAFE"
+    "rebuild measures"
 )
 
 
-score2 = melody.makeMeasures(
-    inPlace=False
+melody = melody.makeMeasures()
+
+
+
+# 加入 Score
+
+new_score.append(
+    melody
 )
-
-
-
-# =========================
-# CLEAN INVALID DURATIONS
-# =========================
-
-print(
-    "final duration check"
-)
-
-
-for n in score2.recurse().notes:
-
-    if n.duration.type == "inexpressible":
-
-        print(
-            "fix inexpressible:",
-            n.pitch
-        )
-
-        n.duration = duration.Duration(
-            0.25
-        )
 
 
 
@@ -183,11 +180,12 @@ for n in score2.recurse().notes:
 # =========================
 
 print(
-    "WRITE"
+    "WRITE:",
+    OUTPUT
 )
 
 
-score2.write(
+new_score.write(
     "musicxml",
     fp=OUTPUT
 )
@@ -195,8 +193,4 @@ score2.write(
 
 print(
     "DONE"
-)
-
-print(
-    OUTPUT
 )
