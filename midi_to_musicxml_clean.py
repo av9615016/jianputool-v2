@@ -2,7 +2,7 @@
 # midi_to_musicxml_clean.py
 #
 # JianpuTool MVP 1.1
-# MIDI -> Clean MusicXML V3.1 FINAL
+# MIDI -> Clean MusicXML V3.1 melody extract
 #
 
 import sys
@@ -34,96 +34,71 @@ def quantize(value):
 
 
 # -----------------------------
-# 自動選主旋律
+# 抽取主旋律
 # -----------------------------
 
-def choose_melody(score):
+def extract_melody(part):
 
-    best_part = None
-    best_score = -1
-
-
-    for p in score.parts:
+    result = stream.Part()
 
 
-        notes = list(
-            p.flatten().notes
-        )
+    print("分析右手旋律...")
 
 
-        if len(notes) == 0:
-            continue
+    for n in part.flatten().notes:
 
 
+        # 單音
 
-        pitch_sum = 0
-        count = 0
-
-
-
-        for n in notes:
-
-
-            if isinstance(
-                n,
-                note.Note
-            ):
-
-                pitch_sum += n.pitch.midi
-                count += 1
+        if isinstance(
+            n,
+            note.Note
+        ):
 
 
+            # 鋼琴右手通常 C4以上
 
-            elif isinstance(
-                n,
-                chord.Chord
-            ):
+            if n.pitch.midi >= 60:
 
-                pitch_sum += max(
-                    x.midi
-                    for x in n.pitches
+                result.append(
+                    copy.deepcopy(n)
                 )
 
-                count += 1
+
+
+        # 和弦
+
+        elif isinstance(
+            n,
+            chord.Chord
+        ):
+
+
+            # 取最高音
+
+            highest = max(
+                n.pitches,
+                key=lambda x:x.midi
+            )
+
+
+            new_note = note.Note(
+                highest
+            )
+
+
+            new_note.duration = copy.deepcopy(
+                n.duration
+            )
+
+
+            result.append(
+                new_note
+            )
 
 
 
-        if count == 0:
-            continue
-
-
-
-        avg_pitch = pitch_sum / count
-
-
-
-        value = (
-            len(notes)
-            +
-            avg_pitch * 2
-        )
-
-
-        print(
-            "Part:",
-            p.id,
-            "Notes:",
-            len(notes),
-            "AvgPitch:",
-            avg_pitch
-        )
-
-
-
-        if value > best_score:
-
-            best_score = value
-            best_part = p
-
-
-
-    return best_part
-
+    return result
 
 
 
@@ -145,8 +120,9 @@ def remove_noise(part):
             continue
 
 
-        result.append(n)
-
+        result.append(
+            n
+        )
 
 
     return result
@@ -163,10 +139,9 @@ def fix_measures(part):
     new_part = stream.Part()
 
 
-    ts = meter.TimeSignature("4/4")
-
-    new_part.append(ts)
-
+    new_part.append(
+        meter.TimeSignature("4/4")
+    )
 
 
     current = 0
@@ -194,6 +169,7 @@ def fix_measures(part):
 
 
 
+        # 超過4拍
 
         if current + dur > 4:
 
@@ -216,8 +192,9 @@ def fix_measures(part):
 
 
 
-
-        new_part.append(obj)
+        new_part.append(
+            obj
+        )
 
 
         current += dur
@@ -226,10 +203,12 @@ def fix_measures(part):
 
         if abs(current-4)<0.001:
 
-            current=0
+            current = 0
 
 
 
+
+    # 補尾
 
     if current > 0:
 
@@ -238,7 +217,9 @@ def fix_measures(part):
 
         rest.duration.quarterLength = 4-current
 
-        new_part.append(rest)
+        new_part.append(
+            rest
+        )
 
 
 
@@ -264,33 +245,39 @@ def process():
 
 
 
-    print("自動選擇主旋律...")
+    print("取得鋼琴 Part...")
 
 
-    part = choose_melody(score)
+    # 保留 V3.0 成功方式
+
+    part = score.parts[0]
 
 
 
-    if part is None:
+    print("抽取旋律...")
 
-        raise Exception(
-            "找不到旋律"
-        )
+
+    part = extract_melody(
+        part
+    )
 
 
 
     print("移除雜訊...")
 
 
-    part = remove_noise(part)
+    part = remove_noise(
+        part
+    )
 
 
 
+    print("修正小節...")
 
-    print("量化節奏...")
 
-
-    clean_part = fix_measures(part)
+    clean_part = fix_measures(
+        part
+    )
 
 
 
@@ -320,7 +307,6 @@ def process():
     )
 
 
-
     print(
         "完成:",
         OUTPUT
@@ -329,6 +315,6 @@ def process():
 
 
 
-if __name__ == "__main__":
+if __name__=="__main__":
 
     process()
