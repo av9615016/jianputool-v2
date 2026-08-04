@@ -41,7 +41,6 @@ Jianpu PDF
 )
 
 
-
 # ==========================
 # PATH
 # ==========================
@@ -65,7 +64,7 @@ os.makedirs(
 
 
 # ==========================
-# command
+# Command
 # ==========================
 
 def run_cmd(cmd):
@@ -99,25 +98,25 @@ def run_cmd(cmd):
 
 
 # ==========================
-# 找 jianpu ly
+# 找 LY
 # ==========================
 
 def find_generated_ly(uid):
 
-    ly_file = os.path.join(
+
+    target = os.path.join(
         OUTPUT_DIR,
         f"{uid}_final.ly"
     )
 
 
-    if os.path.exists(
-        ly_file
-    ):
+    if os.path.exists(target):
 
-        return ly_file
+        return target
 
 
-    # 備用：找最新 ly
+
+    # 備用搜尋
 
     latest = None
     latest_time = 0
@@ -134,9 +133,11 @@ def find_generated_ly(uid):
                     f
                 )
 
+
                 t = os.path.getmtime(
                     path
                 )
+
 
                 if t > latest_time:
 
@@ -144,7 +145,9 @@ def find_generated_ly(uid):
                     latest = path
 
 
+
     return latest
+
 
 
 
@@ -153,7 +156,7 @@ def find_generated_ly(uid):
 # ==========================
 
 uploaded = st.file_uploader(
-    "上傳 MP3 / WAV    "開始轉換 MIDI",
+    "上傳 MP3 / WAV / MIDI",
     type=[
         "mp3",
         "wav",
@@ -193,32 +196,39 @@ if uploaded:
 
 
     if st.button(
-    "開始轉換 🎵"
-):
+        "開始轉換 🎵"
+    ):
 
 
-    # 清除舊輸出，避免抓到上一首
-
-    for f in os.listdir(OUTPUT_DIR):
-
-        if (
-            f.endswith(".ly")
-            or f.endswith(".pdf")
-        ):
-
-            os.remove(
-                os.path.join(
-                    OUTPUT_DIR,
-                    f
-                )
-            )
+        try:
 
 
-    try:
+            # ======================
+            # 清除舊輸出
+            # ======================
 
-            # ==================
-            # Audio / MIDI
-            # ==================
+            for f in os.listdir(
+                OUTPUT_DIR
+            ):
+
+                if (
+                    f.endswith(".ly")
+                    or f.endswith(".pdf")
+                    or f.endswith(".musicxml")
+                ):
+
+                    os.remove(
+                        os.path.join(
+                            OUTPUT_DIR,
+                            f
+                        )
+                    )
+
+
+
+            # ======================
+            # MIDI
+            # ======================
 
             if uploaded.name.lower().endswith(
                 (
@@ -227,10 +237,13 @@ if uploaded:
                 )
             ):
 
+
                 midi_file = input_file
 
 
+
             else:
+
 
                 st.info(
                     "🎧 Audio → MIDI"
@@ -264,9 +277,9 @@ if uploaded:
 
 
 
-            # ==================
+            # ======================
             # MIDI → MusicXML
-            # ==================
+            # ======================
 
             raw_xml = os.path.join(
                 OUTPUT_DIR,
@@ -285,9 +298,9 @@ if uploaded:
 
 
 
-            # ==================
+            # ======================
             # Clean
-            # ==================
+            # ======================
 
             clean_xml = os.path.join(
                 OUTPUT_DIR,
@@ -306,9 +319,9 @@ if uploaded:
 
 
 
-            # ==================
-            # Fix
-            # ==================
+            # ======================
+            # Fix Jianpu
+            # ======================
 
             final_xml = os.path.join(
                 OUTPUT_DIR,
@@ -327,9 +340,9 @@ if uploaded:
 
 
 
-            # ==================
-            # MusicXML → Jianpu LY
-            # ==================
+            # ======================
+            # MusicXML → LY
+            # ======================
 
             st.info(
                 "🎹 MusicXML → Jianpu"
@@ -352,11 +365,13 @@ if uploaded:
             )
 
 
+
             if ly_file is None:
 
                 raise Exception(
                     "找不到 jianpu-ly 產生的 ly"
                 )
+
 
 
             st.success(
@@ -365,9 +380,9 @@ if uploaded:
 
 
 
-            # ==================
-            # LilyPond PDF
-            # ==================
+            # ======================
+            # LilyPond
+            # ======================
 
             st.info(
                 "📄 LilyPond PDF"
@@ -416,7 +431,9 @@ if uploaded:
                 st.download_button(
                     "下載簡譜 PDF",
                     f,
-                    file_name=os.path.basename(pdf_file)
+                    file_name=os.path.basename(
+                        pdf_file
+                    )
                 )
 
 
