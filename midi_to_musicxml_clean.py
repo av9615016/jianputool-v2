@@ -2,7 +2,8 @@
 # midi_to_musicxml_clean.py
 #
 # JianpuTool MVP 1.1
-# MIDI -> Clean MusicXML V3.1 melody extract
+# MIDI -> Clean MusicXML
+# V3.1.1 melody extract + preserve offset
 #
 
 import sys
@@ -34,7 +35,8 @@ def quantize(value):
 
 
 # -----------------------------
-# 抽取主旋律
+# 抽取右手旋律
+# 保留 offset
 # -----------------------------
 
 def extract_melody(part):
@@ -42,7 +44,7 @@ def extract_melody(part):
     result = stream.Part()
 
 
-    print("分析右手旋律...")
+    print("抽取旋律...")
 
 
     for n in part.flatten().notes:
@@ -50,31 +52,26 @@ def extract_melody(part):
 
         # 單音
 
-        if isinstance(
-            n,
-            note.Note
-        ):
+        if isinstance(n, note.Note):
 
-
-            # 鋼琴右手通常 C4以上
 
             if n.pitch.midi >= 60:
 
-                result.append(
-                    copy.deepcopy(n)
+
+                obj = copy.deepcopy(n)
+
+
+                result.insert(
+                    n.offset,
+                    obj
                 )
 
 
 
         # 和弦
 
-        elif isinstance(
-            n,
-            chord.Chord
-        ):
+        elif isinstance(n, chord.Chord):
 
-
-            # 取最高音
 
             highest = max(
                 n.pitches,
@@ -82,18 +79,19 @@ def extract_melody(part):
             )
 
 
-            new_note = note.Note(
+            obj = note.Note(
                 highest
             )
 
 
-            new_note.duration = copy.deepcopy(
+            obj.duration = copy.deepcopy(
                 n.duration
             )
 
 
-            result.append(
-                new_note
+            result.insert(
+                n.offset,
+                obj
             )
 
 
@@ -104,7 +102,7 @@ def extract_melody(part):
 
 
 # -----------------------------
-# 移除太短音符
+# 移除短音
 # -----------------------------
 
 def remove_noise(part):
@@ -120,7 +118,8 @@ def remove_noise(part):
             continue
 
 
-        result.append(
+        result.insert(
+            n.offset,
             n
         )
 
@@ -131,7 +130,8 @@ def remove_noise(part):
 
 
 # -----------------------------
-# 修正小節長度
+# 修正小節
+# 保留原 V3.0 邏輯
 # -----------------------------
 
 def fix_measures(part):
@@ -148,7 +148,14 @@ def fix_measures(part):
 
 
 
-    for n in part.flatten().notesAndRests:
+    notes = sorted(
+        part.flatten().notesAndRests,
+        key=lambda x:x.offset
+    )
+
+
+
+    for n in notes:
 
 
         dur = quantize(
@@ -156,7 +163,7 @@ def fix_measures(part):
         )
 
 
-        if dur <= 0:
+        if dur <=0:
 
             continue
 
@@ -168,8 +175,6 @@ def fix_measures(part):
         obj.duration.quarterLength = dur
 
 
-
-        # 超過4拍
 
         if current + dur > 4:
 
@@ -208,8 +213,6 @@ def fix_measures(part):
 
 
 
-    # 補尾
-
     if current > 0:
 
 
@@ -217,9 +220,7 @@ def fix_measures(part):
 
         rest.duration.quarterLength = 4-current
 
-        new_part.append(
-            rest
-        )
+        new_part.append(rest)
 
 
 
@@ -229,7 +230,7 @@ def fix_measures(part):
 
 
 # -----------------------------
-# 主程式
+# 主流程
 # -----------------------------
 
 def process():
@@ -245,16 +246,11 @@ def process():
 
 
 
-    print("取得鋼琴 Part...")
+    print("取得 Piano Part...")
 
-
-    # 保留 V3.0 成功方式
 
     part = score.parts[0]
 
-
-
-    print("抽取旋律...")
 
 
     part = extract_melody(
@@ -263,16 +259,13 @@ def process():
 
 
 
-    print("移除雜訊...")
-
-
     part = remove_noise(
         part
     )
 
 
 
-    print("修正小節...")
+    print("建立4/4小節...")
 
 
     clean_part = fix_measures(
@@ -307,6 +300,7 @@ def process():
     )
 
 
+
     print(
         "完成:",
         OUTPUT
@@ -315,6 +309,6 @@ def process():
 
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
     process()
