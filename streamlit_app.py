@@ -66,8 +66,8 @@ except Exception:
 
 
 uploaded_file = st.file_uploader(
-    "上傳 MP3",
-    type=["mp3"]
+    "請上傳 MP3 / WAV / MID",
+    type=["mp3", "wav", "mid", "midi"]
 )
 
 
