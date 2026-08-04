@@ -2,7 +2,7 @@
 # midi_to_musicxml_clean.py
 #
 # JianpuTool MVP 1.1
-# MIDI -> MusicXML Clean V3.2.1 FINAL
+# MIDI -> Clean MusicXML V3.0
 #
 
 import sys
@@ -21,358 +21,102 @@ INPUT = sys.argv[1]
 OUTPUT = sys.argv[2]
 
 
+# -----------------------------
+# 16分音符量化
+# -----------------------------
 
-# -------------------------
-# 量化
-# -------------------------
+def quantize(value):
 
-def quantize(x):
+    return round(value * 4) / 4
 
-    return round(x * 4) / 4
 
 
-
-# -------------------------
-# 選旋律
-# -------------------------
-
-def choose_melody(score):
-
-    best = None
-    best_score = -1
-
-
-    for p in score.parts:
-
-
-        notes = list(
-            p.flatten().notes
-        )
-
-
-        if not notes:
-            continue
-
-
-        pitches=[]
-
-
-        for n in notes:
-
-
-            if isinstance(
-                n,
-                note.Note
-            ):
-
-                pitches.append(
-                    n.pitch.midi
-                )
-
-
-            elif isinstance(
-                n,
-                chord.Chord
-            ):
-
-                pitches.append(
-                    max(
-                        x.midi
-                        for x in n.pitches
-                    )
-                )
-
-
-        if not pitches:
-            continue
-
-
-        avg = sum(pitches)/len(pitches)
-
-
-        score_value = (
-            len(notes)
-            +
-            avg*2
-        )
-
-
-        if score_value > best_score:
-
-            best_score = score_value
-            best = p
-
-
-
-    return best
-
-
-
-
-# -------------------------
-# chord轉最高音
-# -------------------------
-
-def chord_to_note(part):
-
-    result = stream.Part()
-
-
-    for n in part.flatten().notes:
-
-
-        if isinstance(
-            n,
-            chord.Chord
-        ):
-
-
-            new_note = note.Note(
-                max(n.pitches)
-            )
-
-
-            new_note.duration = copy.deepcopy(
-                n.duration
-            )
-
-
-            result.append(
-                new_note
-            )
-
-
-        else:
-
-            result.append(
-                n
-            )
-
-
-    return result
-
-
-
-
-# -------------------------
-# 移除低音
-# -------------------------
-
-def remove_low_notes(part):
-
-    result = stream.Part()
-
-
-    for n in part.notes:
-
-
-        if n.pitch.midi < 55:
-
-            continue
-
-
-        result.append(
-            n
-        )
-
-
-    return result
-
-
-
-
-# -------------------------
-# 移除雜訊
-# -------------------------
+# -----------------------------
+# 移除太短音符
+# -----------------------------
 
 def remove_noise(part):
 
     result = stream.Part()
 
-
     for n in part.notes:
-
 
         if n.duration.quarterLength < 0.15:
-
             continue
 
-
         result.append(n)
-
 
     return result
 
 
 
+# -----------------------------
+# 修正小節長度
+# -----------------------------
 
-# -------------------------
-# 去重複
-# -------------------------
-
-def remove_duplicate(part):
-
-    result = stream.Part()
-
-
-    last_pitch = None
-    last_offset = None
-
-
-    for n in part.notes:
-
-
-        if (
-            n.pitch.midi == last_pitch
-            and
-            n.offset == last_offset
-        ):
-
-            continue
-
-
-        result.append(n)
-
-
-        last_pitch = n.pitch.midi
-        last_offset = n.offset
-
-
-
-    return result
-
-
-
-
-# -------------------------
-# 建立真正Measure
-# -------------------------
-
-def rebuild_measures(part):
-
+def fix_measures(part):
 
     new_part = stream.Part()
 
-
-    new_part.append(
-        meter.TimeSignature("4/4")
-    )
+    ts = meter.TimeSignature("4/4")
+    new_part.append(ts)
 
 
-    measure_number = 1
+    current = 0
 
 
-    m = stream.Measure(
-        number=measure_number
-    )
+    for n in part.flat.notesAndRests:
 
 
-    beat = 0
+        dur = quantize(n.duration.quarterLength)
 
 
-
-    for n in part.notes:
+        if dur <= 0:
+            continue
 
 
         obj = copy.deepcopy(n)
 
-
-        dur = quantize(
-            obj.duration.quarterLength
-        )
-
-
-        if dur <=0:
-
-            continue
-
-
-
         obj.duration.quarterLength = dur
 
 
+        # 超過小節
+        if current + dur > 4:
 
-        # 超過4拍切割
-
-        if beat + dur > 4:
-
-
-            remain = 4-beat
+            remain = 4 - current
 
 
             if remain > 0:
 
-
-                r = note.Rest()
-
-                r.duration.quarterLength = remain
-
-                m.append(r)
+                rest = note.Rest()
+                rest.duration.quarterLength = remain
+                new_part.append(rest)
 
 
-
-            new_part.append(m)
-
-
-            measure_number += 1
+            current = 0
 
 
-            m = stream.Measure(
-                number=measure_number
-            )
+        new_part.append(obj)
 
-
-            beat = 0
+        current += dur
 
 
 
+        # 小節完成
 
-        m.append(obj)
+        if abs(current - 4) < 0.001:
 
-
-        beat += dur
-
-
-
-
-        if beat >=4:
-
-
-            new_part.append(m)
-
-
-            measure_number +=1
-
-
-            m = stream.Measure(
-                number=measure_number
-            )
-
-
-            beat=0
+            current = 0
 
 
 
+    # 補最後小節
 
-    # 最後補滿
+    if current > 0:
 
-    if len(m.notesAndRests)>0:
-
-
-        if beat <4:
-
-
-            r = note.Rest()
-
-            r.duration.quarterLength = (
-                4-beat
-            )
-
-            m.append(r)
-
-
-
-        new_part.append(m)
+        rest = note.Rest()
+        rest.duration.quarterLength = 4-current
+        new_part.append(rest)
 
 
 
@@ -380,16 +124,13 @@ def rebuild_measures(part):
 
 
 
+# -----------------------------
+# 建立 Score
+# -----------------------------
 
-# -------------------------
-# Main
-# -------------------------
+def process():
 
-def main():
-
-
-    print("讀取 MIDI")
-
+    print("讀取 MIDI...")
 
     score = converter.parse(
         INPUT,
@@ -397,96 +138,52 @@ def main():
     )
 
 
-
-    print("選擇旋律")
-
-    part = choose_melody(score)
+    print("取得主旋律...")
 
 
-
-    if part is None:
-
-        raise Exception(
-            "找不到旋律"
-        )
+    part = score.parts[0]
 
 
-
-    print("Chord轉單音")
-
-    part = chord_to_note(part)
-
-
-
-    print("移除低音")
-
-    part = remove_low_notes(part)
-
-
-
-    print("移除雜訊")
+    # 移除雜訊
 
     part = remove_noise(part)
 
 
 
-    print("去重複")
-
-    part = remove_duplicate(part)
+    print("量化節奏...")
 
 
-
-    print("建立Measure")
-
-    part = rebuild_measures(part)
+    clean_part = fix_measures(part)
 
 
 
-    # -----------------
-    # 建立Score
-    # -----------------
+    score_out = stream.Score()
 
-    output = stream.Score()
-
-
-
-    output.append(
+    score_out.append(
         tempo.MetronomeMark(
-            number=84
+            number=80
         )
     )
 
 
-    output.append(
-        part
-    )
+    score_out.append(clean_part)
 
 
 
-    print("重新整理小節")
+    print("輸出 MusicXML...")
 
 
-    output.makeMeasures(
-        inPlace=True
-    )
-
-
-
-    output.write(
+    score_out.write(
         "musicxml",
         fp=OUTPUT
     )
 
 
-
-    print(
-        "完成:",
-        OUTPUT
-    )
+    print("完成:")
+    print(OUTPUT)
 
 
 
+if __name__ == "__main__":
 
-if __name__=="__main__":
-
-    main()
+    process()
