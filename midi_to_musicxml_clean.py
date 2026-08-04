@@ -2,7 +2,7 @@
 #
 # JianpuTool
 # MIDI -> MusicXML
-# V20.3 Jianpu Safe Pitch Engine
+# V20.4 Jianpu PDF Clean Engine
 
 
 import sys
@@ -24,79 +24,77 @@ OUTPUT = sys.argv[2]
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V20.3")
-print(" Jianpu Safe Pitch Engine")
+print(" MIDI TO MUSICXML CLEAN V20.4")
+print(" Jianpu PDF Clean Engine")
 print("==============================")
 
 
 # =========================
-# LOAD
+# LOAD MIDI
 # =========================
 
 print("讀取 MIDI...")
 
-src_score = converter.parse(INPUT)
+src = converter.parse(INPUT)
 
 
 
 # =========================
-# SELECT PART
+# SELECT MELODY
 # =========================
 
 print("選擇旋律軌...")
 
 
-best_part = None
-best_count = 0
+best = None
+max_notes = 0
 
 
-for p in src_score.parts:
+for p in src.parts:
 
-    c = 0
-
-    for n in p.recurse().notes:
-
-        if isinstance(n, note.Note):
-            c += 1
-
-
-    if c > best_count:
-        best_count = c
-        best_part = p
+    c = len(
+        list(
+            p.recurse().notes
+        )
+    )
 
 
+    if c > max_notes:
 
-if best_part is None:
+        max_notes = c
+        best = p
+
+
+
+if best is None:
     raise Exception(
-        "找不到音符"
+        "無旋律"
     )
 
 
 print(
     "原始音符:",
-    best_count
+    max_notes
 )
 
 
 
 # =========================
-# BUILD PART
+# CREATE PART
 # =========================
 
-melody = stream.Part()
+part = stream.Part()
 
-melody.partName = "Melody"
+part.partName = "Melody"
 
 
-# 音樂資訊
-
-melody.insert(
+part.insert(
     0,
     meter.TimeSignature("4/4")
 )
 
 
-melody.insert(
+part.insert(
     0,
     tempo.MetronomeMark(
         number=80
@@ -104,13 +102,13 @@ melody.insert(
 )
 
 
-melody.insert(
+part.insert(
     0,
     clef.TrebleClef()
 )
 
 
-melody.insert(
+part.insert(
     0,
     key.Key("C")
 )
@@ -121,27 +119,28 @@ count = 0
 
 
 
-for n in best_part.recurse().notes:
+# =========================
+# COPY NOTES ONLY
+# =========================
+
+for n in best.recurse().notes:
 
 
     if not isinstance(n, note.Note):
         continue
 
 
-    midi_num = n.pitch.midi
+    midi = n.pitch.midi
 
 
-    # 去除極低雜訊
-    if midi_num < 48:
+    if midi < 48:
         continue
 
 
 
-    new_n = note.Note()
+    new = note.Note()
 
-
-    # 保留原 MIDI pitch
-    new_n.pitch.midi = midi_num
+    new.pitch.midi = midi
 
 
 
@@ -154,19 +153,17 @@ for n in best_part.recurse().notes:
         continue
 
 
+
     if ql > 4:
         ql = 4
 
 
-
-    # 比 V20.2 保留更多節奏
 
     allowed = [
 
         4,
         2,
         1,
-        0.75,
         0.5,
         0.25,
         0.125
@@ -174,20 +171,21 @@ for n in best_part.recurse().notes:
     ]
 
 
-    closest = min(
+    ql = min(
         allowed,
         key=lambda x:
-        abs(x - ql)
+        abs(x-ql)
     )
 
 
-    new_n.duration = duration.Duration(
-        closest
+
+    new.duration = duration.Duration(
+        ql
     )
 
 
-    melody.append(
-        new_n
+    part.append(
+        new
     )
 
 
@@ -203,73 +201,78 @@ print(
 
 
 # =========================
-# PITCH CHECK
+# SCORE
 # =========================
 
-print("================")
-print("Pitch Check")
-print("================")
+score = stream.Score()
 
-
-for n in melody.notes:
-
-    print(
-        n.pitch,
-        n.pitch.midi
-    )
-
-
-
-# =========================
-# BUILD SCORE
-# =========================
-
-
-score_out = stream.Score()
-
-
-score_out.append(
-    melody
+score.append(
+    part
 )
 
 
 
 # =========================
-# MAKE MEASURES
+# MAKE MEASURE
 # =========================
 
 print(
-    "建立4/4小節..."
+    "建立小節..."
 )
 
 
-final_score = score_out.makeMeasures(
+score = score.makeMeasures(
     inPlace=False
 )
 
 
 
 # =========================
-# MEASURE CHECK
+# CLEAN MEASURES
 # =========================
 
 print(
-    "Measure Check"
+    "清理 MusicXML..."
 )
 
 
-for p in final_score.parts:
+for p in score.parts:
 
     for m in p.getElementsByClass(
         "Measure"
     ):
 
-        print(
-            "Measure",
-            m.number,
-            "=",
-            m.duration.quarterLength
-        )
+
+        # 移除 barline 資訊
+        m.leftBarline = None
+        m.rightBarline = None
+
+
+
+        # 移除空休止
+        for r in list(
+            m.recurse().getElementsByClass("Rest")
+        ):
+
+            m.remove(r)
+
+
+
+# =========================
+# FINAL CHECK
+# =========================
+
+print(
+    "Final notes:"
+)
+
+
+for n in score.recurse().notes:
+
+    print(
+        n.pitch,
+        n.pitch.midi
+    )
 
 
 
@@ -282,7 +285,7 @@ print(
 )
 
 
-final_score.write(
+score.write(
     "musicxml",
     fp=OUTPUT
 )
