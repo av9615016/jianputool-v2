@@ -1,22 +1,25 @@
 # midi_to_musicxml_clean.py
 #
-# MIDI -> MusicXML
 # JianpuTool MVP 1.1
-
+# MIDI -> MusicXML
+#
 
 import sys
+import copy
+
 from music21 import converter
 from music21 import stream
 from music21 import meter
 from music21 import tempo
-from music21 import key
+
 
 
 def quantize(value):
 
-    # 16分音符量化
-
-    return round(value * 4) / 4
+    # 16分音符網格
+    return round(
+        value * 4
+    ) / 4
 
 
 
@@ -24,7 +27,6 @@ def convert_midi(
     midi_file,
     output_file
 ):
-
 
     print("讀取 MIDI:")
     print(midi_file)
@@ -45,41 +47,45 @@ def convert_midi(
         new_part = stream.Part()
 
 
-        # 強制4/4
+
+        # 強制 4/4
 
         new_part.append(
             meter.TimeSignature("4/4")
         )
 
 
+
         # 保留速度
 
-        tempos = part.recurse().getElementsByClass(
+        for t in part.recurse().getElementsByClass(
             tempo.MetronomeMark
-        )
+        ):
 
-        for t in tempos:
+            new_part.append(
+                copy.deepcopy(t)
+            )
 
-            new_part.append(t)
 
 
-
-        # 重新插入音符
+        # 處理音符
 
         for n in part.flatten().notesAndRests:
 
 
-            item = n.clone()
+            item = copy.deepcopy(n)
 
 
-            # 修正開始位置
+
+            # 修正 offset
 
             item.offset = quantize(
                 n.offset
             )
 
 
-            # 修正長度
+
+            # 修正 duration
 
             length = quantize(
                 n.duration.quarterLength
@@ -91,7 +97,9 @@ def convert_midi(
                 length = 0.25
 
 
+
             item.duration.quarterLength = length
+
 
 
             new_part.insert(
@@ -129,6 +137,7 @@ def convert_midi(
     print(
         output_file
     )
+
 
 
 
