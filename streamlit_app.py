@@ -104,21 +104,50 @@ def run_cmd(cmd):
 
 def find_generated_ly(uid):
 
+    candidates = []
+
+
     for root, dirs, files in os.walk(BASE_DIR):
 
         for f in files:
 
-            if (
-                f.endswith(".ly")
-                and uid in f
-            ):
+            if f.endswith(".ly"):
 
-                return os.path.join(
+                path = os.path.join(
                     root,
                     f
                 )
 
-    return None
+                candidates.append(
+                    path
+                )
+
+
+    if len(candidates) == 0:
+
+        return None
+
+
+
+    # 優先找 final.ly
+
+    for f in candidates:
+
+        if "final" in f:
+
+            return f
+
+
+
+    # 如果沒有 final，找最新產生的 ly
+
+    candidates.sort(
+        key=os.path.getmtime,
+        reverse=True
+    )
+
+
+    return candidates[0]
 
 
 
