@@ -65,33 +65,6 @@ os.makedirs(
 
 
 # ==========================
-# 清除舊產物
-# ==========================
-
-def clear_old_result():
-
-    for f in os.listdir(OUTPUT_DIR):
-
-        path = os.path.join(
-            OUTPUT_DIR,
-            f
-        )
-
-
-        if os.path.isfile(path):
-
-            if f.lower().endswith(
-                (
-                    ".pdf",
-                    ".ly"
-                )
-            ):
-
-                os.remove(path)
-
-
-
-# ==========================
 # command
 # ==========================
 
@@ -122,6 +95,30 @@ def run_cmd(cmd):
         raise Exception(
             result.stdout
         )
+
+
+
+# ==========================
+# 找檔案
+# ==========================
+
+def find_generated_ly(uid):
+
+    for root, dirs, files in os.walk(BASE_DIR):
+
+        for f in files:
+
+            if (
+                f.endswith(".ly")
+                and uid in f
+            ):
+
+                return os.path.join(
+                    root,
+                    f
+                )
+
+    return None
 
 
 
@@ -177,15 +174,8 @@ if uploaded:
         try:
 
 
-            # 保留上傳檔
-            # 只清除舊結果
-
-            clear_old_result()
-
-
-
             # ==================
-            # Audio -> MIDI
+            # MIDI
             # ==================
 
             if uploaded.name.lower().endswith(
@@ -195,12 +185,10 @@ if uploaded:
                 )
             ):
 
-
                 midi_file = input_file
 
 
             else:
-
 
                 st.info(
                     "🎧 Audio → MIDI"
@@ -235,13 +223,8 @@ if uploaded:
 
 
             # ==================
-            # MIDI -> MusicXML
+            # MIDI → MusicXML
             # ==================
-
-            st.info(
-                "🎼 MIDI → MusicXML"
-            )
-
 
             raw_xml = os.path.join(
                 OUTPUT_DIR,
@@ -264,11 +247,6 @@ if uploaded:
             # Clean
             # ==================
 
-            st.info(
-                "修正 MusicXML"
-            )
-
-
             clean_xml = os.path.join(
                 OUTPUT_DIR,
                 f"{uid}_clean.musicxml"
@@ -287,7 +265,7 @@ if uploaded:
 
 
             # ==================
-            # Final Fix
+            # Fix Jianpu
             # ==================
 
             final_xml = os.path.join(
@@ -308,7 +286,7 @@ if uploaded:
 
 
             # ==================
-            # jianpu-ly
+            # MusicXML → LY
             # ==================
 
             st.info(
@@ -327,52 +305,32 @@ if uploaded:
 
 
 
-           # ==========================
-# 找 jianpu-ly 產生的 ly
-# ==========================
+            # 找真正產生的 ly
 
-ly_file = None
-
-
-for root, dirs, files in os.walk(BASE_DIR):
-
-    for f in files:
-
-        if f.endswith(".ly") and uid in f:
-
-            ly_file = os.path.join(
-                root,
-                f
+            ly_file = find_generated_ly(
+                uid
             )
-
-            break
 
 
             if ly_file is None:
 
-            raise Exception(
-            "找不到 jianpu-ly 產生的 .ly"
-            )
+                raise Exception(
+                    "找不到 jianpu-ly 產生的 ly"
+                )
 
 
             st.success(
-            f"找到簡譜檔案: {ly_file}"
-            )
-
-
-
-            st.success(
-                f"LilyPond檔案: {ly_file}"
+                f"找到 LY: {ly_file}"
             )
 
 
 
             # ==================
-            # LilyPond PDF
+            # LilyPond
             # ==================
 
             st.info(
-                "📄 產生 PDF"
+                "📄 LilyPond PDF"
             )
 
 
@@ -398,7 +356,7 @@ for root, dirs, files in os.walk(BASE_DIR):
             ):
 
                 raise Exception(
-                    "PDF沒有產生"
+                    f"找不到 PDF: {pdf_file}"
                 )
 
 
@@ -412,7 +370,6 @@ for root, dirs, files in os.walk(BASE_DIR):
                 pdf_file,
                 "rb"
             ) as f:
-
 
                 st.download_button(
                     "下載簡譜 PDF",
