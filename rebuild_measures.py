@@ -10,7 +10,7 @@ import copy
 from music21 import converter
 from music21 import stream
 from music21 import meter
-
+from music21 import note
 
 
 if len(sys.argv) < 3:
@@ -159,7 +159,7 @@ for part in score.parts:
     if current > 0:
 
 
-        rest = stream.Rest()
+        rest = note.Rest()
 
 
         rest.duration.quarterLength = (
