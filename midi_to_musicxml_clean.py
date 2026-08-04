@@ -1,111 +1,83 @@
 import sys
-import os
-from music21 import converter, stream, note, chord, meter, tempo
+
+from music21 import (
+    converter,
+    stream,
+    meter,
+    tempo,
+    note,
+    duration
+)
 
 
-print("================ MIDI TO MUSICXML CLEAN V2 ================")
+INPUT = sys.argv[1]
+OUTPUT = sys.argv[2]
 
 
-if len(sys.argv) < 3:
-    print(
-        "使用方式: python midi_to_musicxml_clean.py input.mid output.musicxml"
-    )
-    sys.exit(1)
-
-
-midi_file = sys.argv[1]
-output_file = sys.argv[2]
-
-
-if not os.path.exists(midi_file):
-    raise Exception(
-        f"MIDI not found: {midi_file}"
-    )
+print("================ MIDI TO MUSICXML CLEAN V18 ================")
 
 
 # =========================
-# Load MIDI
+# LOAD MIDI
 # =========================
 
 print("讀取 MIDI...")
 
-score = converter.parse(
-    midi_file
-)
+
+score = converter.parse(INPUT)
+
 
 
 # =========================
-# 分析 Part
+# 找最多音符 Part
 # =========================
 
-print("\n分析 MIDI 軌道...")
+print("選擇旋律軌...")
 
 
-best_part = None
-best_count = 0
+src = None
+max_count = 0
 
 
-for i, p in enumerate(score.parts):
+for p in score.parts:
 
-    notes = list(
-        p.flat.notes
+    count = len(
+        list(
+            p.recurse().notes
+        )
     )
 
-    count = len(notes)
+    if count > max_count:
 
-    print(
-        "PART",
-        i,
-        "name=",
-        p.partName,
-        "notes=",
-        count
-    )
-
-
-    if count > best_count:
-
-        best_count = count
-        best_part = p
-
-
-
-if best_part is None:
-
-    raise Exception(
-        "找不到 MIDI 音符"
-    )
+        max_count = count
+        src = p
 
 
 print(
-    "\n選擇 Part:",
-    best_part.partName,
     "notes:",
-    best_count
+    max_count
 )
 
 
 
 # =========================
-# 建立新旋律
+# 建立新 Part
 # =========================
 
-print("抽取旋律...")
+print("建立旋律...")
 
 
 melody = stream.Part()
 
 
-melody.insert(
-    0,
+# 4/4
+
+melody.append(
     meter.TimeSignature("4/4")
 )
 
 
-# tempo
-
-melody.insert(
-    0,
+melody.append(
     tempo.MetronomeMark(
         number=80
     )
@@ -113,91 +85,102 @@ melody.insert(
 
 
 
-for n in best_part.flat.notes:
+# =========================
+# 保留節奏
+# =========================
+
+for n in src.recurse().notes:
 
 
-    # 和弦只取最高音
-
-    if isinstance(
-        n,
-        chord.Chord
-    ):
-
-        new_note = note.Note(
-            n.pitches[-1]
-        )
-
-        new_note.duration = n.duration
-
-
-    elif isinstance(
-        n,
-        note.Note
-    ):
-
-        new_note = note.Note(
-            n.pitch
-        )
-
-        new_note.duration = n.duration
-
-
-    else:
-
+    if not isinstance(n, note.Note):
         continue
 
 
+    new_n = note.Note(
+        n.pitch
+    )
 
-    melody.append(
-        new_note
+
+    # 保留原始長度
+
+    ql = float(
+        n.duration.quarterLength
+    )
+
+
+    if ql <= 0:
+        continue
+
+
+    # 量化
+
+    allowed = [
+        4,
+        2,
+        1,
+        0.5,
+        0.25
+    ]
+
+
+    ql = min(
+        allowed,
+        key=lambda x:
+        abs(x-ql)
+    )
+
+
+    new_n.duration = duration.Duration(
+        ql
+    )
+
+
+    # 關鍵：
+    # 保留時間位置
+
+    new_n.offset = n.offset
+
+
+    melody.insert(
+        n.offset,
+        new_n
     )
 
 
 
 # =========================
-# 建立 Score
-# =========================
-
-new_score = stream.Score()
-
-
-new_score.append(
-    melody
-)
-
-
-
-# =========================
-# 修正小節
+# 小節
 # =========================
 
 print("建立4/4小節...")
 
 
-new_score.makeMeasures(
-    inPlace=True
+result = stream.Score()
+
+result.append(
+    melody.makeMeasures()
 )
 
 
+
 # =========================
-# 輸出
+# OUTPUT
 # =========================
 
 print("輸出 MusicXML...")
 
 
-new_score.write(
+result.write(
     "musicxml",
-    fp=output_file
+    fp=OUTPUT
 )
 
 
 print(
     "完成:",
-    output_file
+    OUTPUT
 )
 
-
 print(
-    "========================================================"
+"========================================================"
 )
