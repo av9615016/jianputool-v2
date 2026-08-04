@@ -3,7 +3,6 @@ import os
 import uuid
 import subprocess
 import sys
-import shutil
 
 
 st.set_page_config(
@@ -34,12 +33,12 @@ MusicXML
 )
 
 
-BASE_DIR=os.path.dirname(
+BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
 
 
-OUTPUT_DIR=os.path.join(
+OUTPUT_DIR = os.path.join(
     BASE_DIR,
     "outputs"
 )
@@ -59,7 +58,7 @@ def run_cmd(cmd):
     )
 
 
-    result=subprocess.run(
+    result = subprocess.run(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -72,7 +71,7 @@ def run_cmd(cmd):
     )
 
 
-    if result.returncode !=0:
+    if result.returncode != 0:
 
         raise Exception(
             result.stdout
@@ -80,10 +79,8 @@ def run_cmd(cmd):
 
 
 
-
-
-upload=st.file_uploader(
-    "上傳音樂",
+uploaded = st.file_uploader(
+    "上傳音樂檔",
     type=[
         "mp3",
         "wav",
@@ -94,22 +91,22 @@ upload=st.file_uploader(
 
 
 
-if upload:
+if uploaded:
 
 
-    job=str(uuid.uuid4())[:8]
+    job = str(uuid.uuid4())[:8]
 
 
-    input_file=os.path.join(
+    input_file = os.path.join(
         OUTPUT_DIR,
-        upload.name
+        uploaded.name
     )
 
 
     with open(input_file,"wb") as f:
 
         f.write(
-            upload.getbuffer()
+            uploaded.getbuffer()
         )
 
 
@@ -118,15 +115,15 @@ if upload:
     )
 
 
-    ext=upload.name.lower().split(".")[-1]
+    ext = uploaded.name.lower().split(".")[-1]
 
 
     try:
 
 
-        # =====================
+        # ==========================
         # 1. Audio → MIDI
-        # =====================
+        # ==========================
 
         if ext in [
             "mp3",
@@ -135,11 +132,11 @@ if upload:
 
 
             st.info(
-                "🎤 BasicPitch 分析旋律"
+                "🎤 BasicPitch分析旋律"
             )
 
 
-            midi_file=os.path.join(
+            midi_file = os.path.join(
                 OUTPUT_DIR,
                 f"{job}.mid"
             )
@@ -159,25 +156,57 @@ if upload:
 
 
             st.info(
-                "🎹 使用 MIDI"
+                "🎹 使用MIDI"
             )
 
 
-            midi_file=input_file
+            midi_file = input_file
 
 
 
 
-        # =====================
-        # 2. MIDI → MusicXML
-        # =====================
+        # ==========================
+        # 2. MIDI Quantize
+        # ==========================
+
+
+        st.info(
+            "🎚️ MIDI節拍量化"
+        )
+
+
+        quant_midi = os.path.join(
+            OUTPUT_DIR,
+            f"{job}_quant.mid"
+        )
+
+
+        run_cmd(
+            [
+                sys.executable,
+                "midi_quantize.py",
+                midi_file,
+                quant_midi
+            ]
+        )
+
+
+        midi_file = quant_midi
+
+
+
+
+        # ==========================
+        # 3. MIDI → MusicXML
+        # ==========================
+
 
         st.info(
             "🎼 MIDI轉MusicXML"
         )
 
 
-        raw_xml=os.path.join(
+        raw_xml = os.path.join(
             OUTPUT_DIR,
             f"{job}_raw.musicxml"
         )
@@ -195,9 +224,9 @@ if upload:
 
 
 
-        # =====================
-        # 3. Clean MusicXML
-        # =====================
+        # ==========================
+        # 4. Clean MusicXML
+        # ==========================
 
 
         st.info(
@@ -205,7 +234,7 @@ if upload:
         )
 
 
-        clean_xml=os.path.join(
+        clean_xml = os.path.join(
             OUTPUT_DIR,
             f"{job}_clean.musicxml"
         )
@@ -223,18 +252,17 @@ if upload:
 
 
 
-
-        # =====================
-        # 4. Fix Measure
-        # =====================
+        # ==========================
+        # 5. Jianpu Fix
+        # ==========================
 
 
         st.info(
-            "🔧 修正節拍"
+            "🔧 修正簡譜格式"
         )
 
 
-        final_xml=os.path.join(
+        final_xml = os.path.join(
             OUTPUT_DIR,
             f"{job}_final.musicxml"
         )
@@ -252,9 +280,9 @@ if upload:
 
 
 
-        # =====================
-        # 5. Check Measure
-        # =====================
+        # ==========================
+        # 6. Check Measure
+        # ==========================
 
 
         st.info(
@@ -273,10 +301,9 @@ if upload:
 
 
 
-
-        # =====================
-        # 6. Jianpu LY
-        # =====================
+        # ==========================
+        # 7. Jianpu LY
+        # ==========================
 
 
         st.info(
@@ -295,16 +322,17 @@ if upload:
 
 
 
-        ly_file=final_xml.replace(
+        ly_file = final_xml.replace(
             ".musicxml",
             ".ly"
         )
 
 
 
-        # =====================
-        # 7. LilyPond PDF
-        # =====================
+
+        # ==========================
+        # 8. LilyPond PDF
+        # ==========================
 
 
         st.info(
@@ -323,7 +351,7 @@ if upload:
 
 
 
-        pdf_file=ly_file.replace(
+        pdf_file = ly_file.replace(
             ".ly",
             ".pdf"
         )
@@ -334,18 +362,16 @@ if upload:
 
 
             st.success(
-                "🎉 完成"
+                "🎉 簡譜PDF完成"
             )
 
 
             with open(pdf_file,"rb") as f:
 
-
                 st.download_button(
-                    "下載簡譜PDF",
+                    "下載簡譜 PDF",
                     f,
-                    file_name=
-                    os.path.basename(pdf_file)
+                    file_name=os.path.basename(pdf_file)
                 )
 
 
