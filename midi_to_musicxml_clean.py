@@ -1,3 +1,10 @@
+# midi_to_musicxml_clean.py
+#
+# JianpuTool
+# MIDI -> MusicXML
+# V20.2 SAFE SCORE ENGINE
+
+
 import sys
 
 from music21 import (
@@ -15,7 +22,7 @@ OUTPUT = sys.argv[2]
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V20.1")
+print(" MIDI TO MUSICXML CLEAN V20.2")
 print("==============================")
 
 
@@ -25,49 +32,61 @@ print("==============================")
 
 print("讀取 MIDI...")
 
-score = converter.parse(INPUT)
+midi_score = converter.parse(INPUT)
+
 
 
 # =========================
-# 找旋律軌
+# SELECT MELODY PART
 # =========================
 
 print("選擇旋律軌...")
 
 
-best = None
+best_part = None
 best_count = 0
 
 
-for p in score.parts:
+for part in midi_score.parts:
 
-    c = 0
+    count = 0
 
-    for n in p.recurse().notes:
+    for n in part.recurse().notes:
 
         if isinstance(n, note.Note):
-            c += 1
+            count += 1
 
 
-    if c > best_count:
-        best = p
-        best_count = c
+    if count > best_count:
+
+        best_count = count
+        best_part = part
 
 
 
-if best is None:
-    raise Exception("沒有找到音符")
+if best_part is None:
+
+    raise Exception(
+        "找不到旋律"
+    )
 
 
-print("原始音符:", best_count)
+print(
+    "原始音符:",
+    best_count
+)
 
 
 
 # =========================
-# BUILD MELODY
+# CREATE MELODY PART
 # =========================
 
 melody = stream.Part()
+
+
+melody.partName = "Melody"
+
 
 
 melody.insert(
@@ -78,7 +97,9 @@ melody.insert(
 
 melody.insert(
     0,
-    tempo.MetronomeMark(number=80)
+    tempo.MetronomeMark(
+        number=80
+    )
 )
 
 
@@ -87,25 +108,27 @@ count = 0
 
 
 
-for n in best.recurse().notes:
+for n in best_part.recurse().notes:
 
 
     if not isinstance(n, note.Note):
         continue
 
 
+
     midi = n.pitch.midi
 
 
-    # 去除低音雜訊
+    # 去除低音
     if midi < 48:
         continue
 
 
-    # 複製音符
-    new = note.Note(
+
+    new_note = note.Note(
         n.pitch
     )
+
 
 
     ql = float(
@@ -117,34 +140,39 @@ for n in best.recurse().notes:
         continue
 
 
-    # 最大4拍
+
     if ql > 4:
         ql = 4
 
 
 
-    # 四分音符量化
+    # 節奏量化
     allowed = [
+
         4,
         2,
         1,
         0.5,
         0.25
+
     ]
 
 
     ql = min(
         allowed,
-        key=lambda x:abs(x-ql)
+        key=lambda x:
+        abs(x - ql)
     )
 
 
-    new.duration = duration.Duration(
+    new_note.duration = duration.Duration(
         ql
     )
 
 
-    melody.append(new)
+    melody.append(
+        new_note
+    )
 
 
     count += 1
@@ -162,69 +190,102 @@ print(
 # OCTAVE LIMIT
 # =========================
 
+print(
+    "限制音域..."
+)
+
 
 for n in melody.notes:
 
+
     if n.pitch.octave < 3:
+
         n.pitch.octave = 3
 
 
     if n.pitch.octave > 6:
+
         n.pitch.octave = 6
 
 
 
+
 # =========================
-# MAKE MEASURES
+# SCORE BUILD
 # =========================
 
+print(
+    "建立 Score..."
+)
 
-print("建立小節...")
+
+score_out = stream.Score()
 
 
-result = melody.makeMeasures(
+score_out.append(
+    melody
+)
+
+
+
+# =========================
+# MEASURE BUILD
+# =========================
+
+print(
+    "建立4/4小節..."
+)
+
+
+final_score = score_out.makeMeasures(
     inPlace=False
 )
 
 
 
 # =========================
-# FINAL CHECK
+# CHECK MEASURE
 # =========================
 
+print(
+    "檢查小節..."
+)
 
-print("檢查...")
 
+for part in final_score.parts:
 
-for m in result.getElementsByClass("Measure"):
+    for m in part.getElementsByClass(
+        "Measure"
+    ):
 
-    q = float(
-        m.duration.quarterLength
-    )
-
-    print(
-        "Measure",
-        m.number,
-        q
-    )
+        print(
+            "Measure",
+            m.number,
+            "duration=",
+            m.duration.quarterLength
+        )
 
 
 
 # =========================
-# SAVE
+# WRITE
 # =========================
 
+print(
+    "輸出 MusicXML..."
+)
 
-print("輸出 MusicXML...")
 
-
-result.write(
+final_score.write(
     "musicxml",
     fp=OUTPUT
 )
+
 
 
 print(
     "完成:",
     OUTPUT
 )
+
+print("==============================")
