@@ -3,6 +3,7 @@ import os
 import uuid
 import subprocess
 import sys
+import shutil
 
 
 # ==========================
@@ -217,12 +218,18 @@ if uploaded:
                     or f.endswith(".musicxml")
                 ):
 
-                    os.remove(
-                        os.path.join(
-                            OUTPUT_DIR,
-                            f
-                        )
-                    )
+                   path = os.path.join(
+                   OUTPUT_DIR,
+                   f
+                   )
+
+                   if os.path.isfile(path):
+
+                   os.remove(path)
+
+                   elif os.path.isdir(path):
+
+                   shutil.rmtree(path)
 
 
 
