@@ -196,7 +196,7 @@ result = melody.makeMeasures(
 print("檢查...")
 
 
-for m in result.parts[0].getElementsByClass("Measure"):
+for m in result.getElementsByClass("Measure"):
 
     q = float(
         m.duration.quarterLength
