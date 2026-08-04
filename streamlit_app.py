@@ -1,15 +1,16 @@
+#
+# streamlit_app.py
+#
+# JianpuTool MVP 1.1.1
+#
+
 import streamlit as st
 import os
 import uuid
 import subprocess
 import sys
-import shutil
 import traceback
 
-
-# ==========================
-# Page
-# ==========================
 
 st.set_page_config(
     page_title="JianpuTool MVP 1.1",
@@ -21,37 +22,41 @@ st.title("🎵 JianpuTool MVP 1.1")
 
 st.write(
 """
-MP3 / WAV / MIDI → MIDI → MusicXML → Jianpu PDF
+MP3 / WAV / MIDI → Jianpu PDF
 
 Pipeline:
 
+MP3/WAV:
 Audio
- ↓
+↓
 BasicPitch
- ↓
+↓
 MIDI
- ↓
+↓
 MusicXML Clean
- ↓
+↓
+jianpu-fix V17
+↓
 jianpu-ly
- ↓
+↓
+LilyPond PDF
+
+
+MIDI:
+MIDI
+↓
+Melody Extract
+↓
+MusicXML
+↓
+jianpu-ly
+↓
 LilyPond PDF
 """
 )
 
 
-# ==========================
-# PATH
-# ==========================
-
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
-
-OUTPUT_DIR = os.path.join(
-    BASE_DIR,
-    "outputs"
-)
+OUTPUT_DIR = "outputs"
 
 os.makedirs(
     OUTPUT_DIR,
@@ -59,16 +64,13 @@ os.makedirs(
 )
 
 
-# ==========================
-# command
-# ==========================
 
 def run_cmd(cmd):
 
-    st.write("執行:")
     st.code(
         " ".join(cmd)
     )
+
 
     result = subprocess.run(
         cmd,
@@ -77,7 +79,9 @@ def run_cmd(cmd):
         text=True
     )
 
+
     st.text(result.stdout)
+
 
     if result.returncode != 0:
 
@@ -86,32 +90,7 @@ def run_cmd(cmd):
         )
 
 
-# ==========================
-# find file
-# ==========================
 
-def find_file(folder, ext):
-
-    files = []
-
-    for f in os.listdir(folder):
-
-        if f.lower().endswith(ext):
-
-            files.append(
-                os.path.join(folder,f)
-            )
-
-    if files:
-        return files[0]
-
-    return None
-
-
-
-# ==========================
-# Upload
-# ==========================
 
 uploaded = st.file_uploader(
     "上傳 MP3 / WAV / MIDI",
@@ -124,15 +103,16 @@ uploaded = st.file_uploader(
 )
 
 
+
 if uploaded:
 
 
-    uid = uuid.uuid4().hex[:8]
+    file_id = str(uuid.uuid4())[:8]
 
 
     input_file = os.path.join(
         OUTPUT_DIR,
-        f"{uid}_{uploaded.name}"
+        file_id + "_" + uploaded.name
     )
 
 
@@ -142,8 +122,9 @@ if uploaded:
     ) as f:
 
         f.write(
-            uploaded.read()
+            uploaded.getbuffer()
         )
+
 
 
     st.success(
@@ -151,260 +132,241 @@ if uploaded:
     )
 
 
-    if st.button(
-        "開始轉換 🎵"
-    ):
+
+    ext = uploaded.name.lower().split(".")[-1]
 
 
-        try:
+
+    try:
 
 
-            # ---------------------
-            # MIDI
-            # ---------------------
+        # ======================
+        # MIDI
+        # ======================
 
-            if uploaded.name.lower().endswith(
-                (".mid",".midi")
-            ):
-
-                midi_file=input_file
-
-
-            else:
+        if ext in [
+            "mid",
+            "midi"
+        ]:
 
 
-                st.info(
-                    "🎧 Audio → MIDI"
-                )
+            st.subheader(
+                "🎼 MIDI → MusicXML"
+            )
 
 
-                midi_file=os.path.join(
-                    OUTPUT_DIR,
-                    f"{uid}.mid"
-                )
+            raw_musicxml = os.path.join(
+                OUTPUT_DIR,
+                file_id+"_raw.musicxml"
+            )
 
 
-                run_cmd(
+
+            run_cmd(
+                [
+                    sys.executable,
+                    "midi_to_musicxml_clean.py",
+                    input_file,
+                    raw_musicxml
+                ]
+            )
+
+
+
+            final_musicxml = raw_musicxml
+
+
+
+        # ======================
+        # Audio
+        # ======================
+
+        else:
+
+
+            st.subheader(
+                "🎧 Audio → MIDI"
+            )
+
+
+            midi_file = os.path.join(
+                OUTPUT_DIR,
+                file_id+".mid"
+            )
+
+
+            run_cmd(
                 [
                     sys.executable,
                     "basicpitch_convert.py",
                     input_file,
                     midi_file
                 ]
-                )
-
-
-
-            if not os.path.exists(midi_file):
-
-                raise Exception(
-                    "MIDI沒有產生"
-                )
-
-
-
-            # ---------------------
-            # MIDI -> MusicXML
-            # ---------------------
-
-            st.info(
-                "🎼 MIDI → MusicXML"
             )
 
 
-            raw_xml=os.path.join(
+
+            raw_musicxml = os.path.join(
                 OUTPUT_DIR,
-                f"{uid}_raw.musicxml"
+                file_id+"_raw.musicxml"
             )
 
 
             run_cmd(
-            [
-                sys.executable,
-                "midi_to_musicxml_clean.py",
-                midi_file,
-                raw_xml
-            ]
+                [
+                    sys.executable,
+                    "midi_to_musicxml_clean.py",
+                    midi_file,
+                    raw_musicxml
+                ]
             )
 
 
 
-            # ---------------------
-            # Clean
-            # ---------------------
+            clean_musicxml = os.path.join(
+                OUTPUT_DIR,
+                file_id+"_clean.musicxml"
+            )
 
-            st.info(
+
+            st.subheader(
                 "修正 MusicXML"
             )
 
 
-            clean_xml=os.path.join(
+            run_cmd(
+                [
+                    sys.executable,
+                    "clean_musicxml.py",
+                    raw_musicxml,
+                    clean_musicxml
+                ]
+            )
+
+
+
+            final_musicxml = os.path.join(
                 OUTPUT_DIR,
-                f"{uid}_clean.musicxml"
+                file_id+"_final.musicxml"
             )
 
 
             run_cmd(
-            [
-                sys.executable,
-                "clean_musicxml.py",
-                raw_xml,
-                clean_xml
-            ]
-            )
-
-
-
-            # ---------------------
-            # Final
-            # ---------------------
-
-            final_xml=os.path.join(
-                OUTPUT_DIR,
-                f"{uid}_final.musicxml"
-            )
-
-
-            if os.path.exists(
-                "jianpu_fix_musicxml.py"
-            ):
-
-
-                run_cmd(
                 [
                     sys.executable,
                     "jianpu_fix_musicxml.py",
-                    clean_xml,
-                    final_xml
+                    clean_musicxml,
+                    final_musicxml
                 ]
-                )
-
-            else:
-
-                shutil.copy(
-                    clean_xml,
-                    final_xml
-                )
-
-
-
-            # ---------------------
-            # jianpu-ly
-            # ---------------------
-
-            st.info(
-                "🎹 MusicXML → LilyPond"
             )
 
 
-            run_cmd(
+
+        # ======================
+        # jianpu-ly
+        # ======================
+
+        st.subheader(
+            "🎹 MusicXML → LilyPond"
+        )
+
+
+        run_cmd(
             [
                 sys.executable,
                 "-m",
                 "jianpu_ly",
-                final_xml
+                final_musicxml
             ]
-            )
+        )
 
 
 
-            # 找 ly
+        # 找 ly
 
-            ly_file=find_file(
-                OUTPUT_DIR,
-                ".ly"
-            )
+        ly_file = None
 
 
-            if ly_file is None:
+        for f in os.listdir(
+            OUTPUT_DIR
+        ):
 
-                raise Exception(
-                    "jianpu_ly沒有產生 .ly"
+            if (
+                f.endswith(".ly")
+                and file_id in f
+            ):
+
+                ly_file = os.path.join(
+                    OUTPUT_DIR,
+                    f
                 )
 
 
-            st.success(
-                f"找到 LilyPond: {ly_file}"
+        if ly_file is None:
+
+            raise Exception(
+                "找不到 LilyPond 檔案"
             )
 
 
 
-            # ---------------------
-            # LilyPond PDF
-            # ---------------------
-
-            st.info(
-                "📄 LilyPond PDF"
-            )
+        st.subheader(
+            "📄 LilyPond PDF"
+        )
 
 
-            run_cmd(
+
+        run_cmd(
             [
                 "lilypond",
                 "-o",
                 OUTPUT_DIR,
                 ly_file
             ]
+        )
+
+
+
+        pdf_file = ly_file.replace(
+            ".ly",
+            ".pdf"
+        )
+
+
+        if os.path.exists(pdf_file):
+
+            st.success(
+                "完成 PDF"
             )
 
 
-
-            pdf_file=find_file(
-                OUTPUT_DIR,
-                ".pdf"
-            )
-
-
-            if pdf_file:
+            with open(
+                pdf_file,
+                "rb"
+            ) as f:
 
 
-                st.success(
-                    "🎉 完成!"
+                st.download_button(
+                    "下載簡譜 PDF",
+                    f,
+                    file_name="jianpu.pdf"
                 )
 
 
-                with open(
-                    pdf_file,
-                    "rb"
-                ) as f:
+        else:
 
-                    st.download_button(
-                        "下載簡譜 PDF",
-                        f,
-                        file_name=os.path.basename(pdf_file)
-                    )
-
-
-            else:
-
-                raise Exception(
-                    "PDF沒有產生"
-                )
-
-
-
-        except Exception as e:
-
-
-            st.error(
-                "轉換錯誤"
+            raise Exception(
+                "PDF產生失敗"
             )
 
 
-            st.exception(e)
+
+    except Exception as e:
 
 
+        st.error(
+            "轉換錯誤"
+        )
 
-# ==========================
-# debug
-# ==========================
 
-with st.expander(
-    "檢查 outputs"
-):
-
-    for f in os.listdir(
-        OUTPUT_DIR
-    ):
-
-        st.write(f)
+        st.exception(e)
