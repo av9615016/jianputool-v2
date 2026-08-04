@@ -3,10 +3,11 @@
 #
 # JianpuTool MVP 1.1
 # MIDI -> Clean MusicXML
-# V3.1.1 melody extract + preserve offset
+# V3.1.2 Streamlit Cloud FIX
 #
 
 import sys
+import os
 import copy
 
 from music21 import converter
@@ -19,13 +20,13 @@ from music21 import tempo
 
 
 INPUT = sys.argv[1]
-OUTPUT = sys.argv[2]
+OUTPUT_DIR = sys.argv[2]
 
 
 
-# -----------------------------
+# =========================
 # 16分音符量化
-# -----------------------------
+# =========================
 
 def quantize(value):
 
@@ -34,15 +35,13 @@ def quantize(value):
 
 
 
-# -----------------------------
-# 抽取右手旋律
-# 保留 offset
-# -----------------------------
+# =========================
+# 抽取旋律
+# =========================
 
 def extract_melody(part):
 
     result = stream.Part()
-
 
     print("抽取旋律...")
 
@@ -50,16 +49,12 @@ def extract_melody(part):
     for n in part.flatten().notes:
 
 
-        # 單音
-
         if isinstance(n, note.Note):
 
 
             if n.pitch.midi >= 60:
 
-
                 obj = copy.deepcopy(n)
-
 
                 result.insert(
                     n.offset,
@@ -67,8 +62,6 @@ def extract_melody(part):
                 )
 
 
-
-        # 和弦
 
         elif isinstance(n, chord.Chord):
 
@@ -95,15 +88,14 @@ def extract_melody(part):
             )
 
 
-
     return result
 
 
 
 
-# -----------------------------
-# 移除短音
-# -----------------------------
+# =========================
+# 移除雜音
+# =========================
 
 def remove_noise(part):
 
@@ -129,10 +121,9 @@ def remove_noise(part):
 
 
 
-# -----------------------------
-# 修正小節
-# 保留原 V3.0 邏輯
-# -----------------------------
+# =========================
+# 建立4/4小節
+# =========================
 
 def fix_measures(part):
 
@@ -147,12 +138,10 @@ def fix_measures(part):
     current = 0
 
 
-
     notes = sorted(
         part.flatten().notesAndRests,
         key=lambda x:x.offset
     )
-
 
 
     for n in notes:
@@ -163,7 +152,7 @@ def fix_measures(part):
         )
 
 
-        if dur <=0:
+        if dur <= 0:
 
             continue
 
@@ -179,18 +168,16 @@ def fix_measures(part):
         if current + dur > 4:
 
 
-            remain = 4-current
+            remain = 4 - current
 
 
             if remain > 0:
-
 
                 rest = note.Rest()
 
                 rest.duration.quarterLength = remain
 
                 new_part.append(rest)
-
 
 
             current = 0
@@ -206,7 +193,7 @@ def fix_measures(part):
 
 
 
-        if abs(current-4)<0.001:
+        if abs(current - 4) < 0.001:
 
             current = 0
 
@@ -229,9 +216,9 @@ def fix_measures(part):
 
 
 
-# -----------------------------
+# =========================
 # 主流程
-# -----------------------------
+# =========================
 
 def process():
 
@@ -256,7 +243,6 @@ def process():
     part = extract_melody(
         part
     )
-
 
 
     part = remove_noise(
@@ -285,25 +271,43 @@ def process():
     )
 
 
+
     score_out.append(
         clean_part
     )
 
 
 
+    # =========================
+    # 修正輸出
+    # =========================
+
     print("輸出 MusicXML...")
+
+
+    os.makedirs(
+        OUTPUT_DIR,
+        exist_ok=True
+    )
+
+
+    output_file = os.path.join(
+        OUTPUT_DIR,
+        "raw.musicxml"
+    )
+
 
 
     score_out.write(
         "musicxml",
-        fp=OUTPUT
+        fp=output_file
     )
 
 
 
     print(
         "完成:",
-        OUTPUT
+        output_file
     )
 
 
