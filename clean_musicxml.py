@@ -1,196 +1,215 @@
+# ============================================================
+# clean_musicxml.py
+#
+# JianpuTool MVP 1.1
 # CLEAN MUSICXML V34 FIX
-# JianpuTool MVP
+#
+# Input:
+#   raw.musicxml
+#
+# Output:
+#   clean.musicxml
+#
+# ============================================================
 
-from lxml import etree
-from copy import deepcopy
+
 import sys
+import os
+from lxml import etree
 
+
+print("================ CLEAN MUSICXML V34 FIX ================")
+
+
+# ------------------------------------------------------------
+# Check arguments
+# ------------------------------------------------------------
 
 if len(sys.argv) < 3:
+
+    print(
+        "Usage:"
+    )
+
     print(
         "python clean_musicxml.py input.musicxml output.musicxml"
     )
-    raise SystemExit
 
-
-inp = sys.argv[1]
-out = sys.argv[2]
-
-
-print("================")
-print("CLEAN MUSICXML V34 FIX")
-print("================")
-
-
-tree = etree.parse(inp)
-root = tree.getroot()
-
-
-# ==========================
-# Remove notation
-# ==========================
-
-for tag in (
-    "chord",
-    "beam",
-    "tie",
-    "backup",
-    "forward",
-    "voice"
-):
-
-    for e in root.xpath(f".//{tag}"):
-
-        p = e.getparent()
-
-        if p is not None:
-            p.remove(e)
+    sys.exit(1)
 
 
 
-# ==========================
-# Assume divisions = 16
-# 4/4 bar = 64
-# ==========================
-
-BAR = 64
+input_file = sys.argv[1]
+output_file = sys.argv[2]
 
 
-measures = root.xpath(".//measure")
 
+# ------------------------------------------------------------
+# Path check
+# ------------------------------------------------------------
 
-for measure in measures:
+if not os.path.isfile(input_file):
 
-    cur = 0
-
-    notes = list(
-        measure.xpath("./note")
+    raise Exception(
+        f"Input MusicXML not found: {input_file}"
     )
 
 
-    for note in notes:
+if os.path.isdir(output_file):
 
-        duration = note.find("duration")
-
-
-        if duration is None:
-            continue
-
-
-        try:
-            length = int(duration.text)
-
-        except:
-            continue
+    raise Exception(
+        f"Output path is directory, need file: {output_file}"
+    )
 
 
 
-        # split note crossing bar
+# ------------------------------------------------------------
+# Load XML
+# ------------------------------------------------------------
 
-        if cur + length > BAR:
-
-            first = BAR - cur
-
-            overflow = length - first
-
-
-            if first > 0:
-
-                duration.text = str(first)
-
-
-            second = deepcopy(note)
-
-
-            second_duration = second.find(
-                "duration"
-            )
-
-
-            if second_duration is not None:
-                second_duration.text = str(overflow)
-
-
-
-            # find next measure
-
-            next_measure = measure.getnext()
-
-
-            while next_measure is not None:
-
-                if (
-                    isinstance(
-                        next_measure.tag,
-                        str
-                    )
-                    and
-                    etree.QName(
-                        next_measure
-                    ).localname
-                    ==
-                    "measure"
-                ):
-                    break
-
-
-                next_measure = next_measure.getnext()
-
-
-
-            if next_measure is None:
-
-                next_measure = etree.Element(
-                    "measure"
-                )
-
-                next_measure.set(
-                    "number",
-                    str(
-                        int(
-                            measure.get(
-                                "number",
-                                "0"
-                            )
-                        )
-                        + 1
-                    )
-                )
-
-
-                measure.addnext(
-                    next_measure
-                )
-
-
-
-            next_measure.insert(
-                0,
-                second
-            )
-
-
-            cur = overflow
-
-
-        else:
-
-            cur += length
-
-
-
-# ==========================
-# Write
-# ==========================
-
-tree.write(
-    out,
-    encoding="utf-8",
-    xml_declaration=True
+parser = etree.XMLParser(
+    remove_blank_text=True
 )
 
 
-print("================")
-print("DONE")
-print(out)
-print("================")
+tree = etree.parse(
+    input_file,
+    parser
+)
+
+
+root = tree.getroot()
+
+
+
+# ------------------------------------------------------------
+# Remove unnecessary elements
+# ------------------------------------------------------------
+
+remove_tags = [
+
+    "encoding",
+
+    "supports",
+
+    "software",
+
+    "creator"
+
+]
+
+
+for tag in remove_tags:
+
+    for node in root.xpath(
+        f".//{tag}"
+    ):
+
+        parent = node.getparent()
+
+        if parent is not None:
+
+            parent.remove(node)
+
+
+
+# ------------------------------------------------------------
+# Fix duration
+# ------------------------------------------------------------
+
+for duration in root.xpath(
+    ".//duration"
+):
+
+    try:
+
+        value = int(
+            duration.text
+        )
+
+
+        if value <= 0:
+
+            duration.text = "1"
+
+
+    except:
+
+        duration.text = "1"
+
+
+
+# ------------------------------------------------------------
+# Fix divisions
+# ------------------------------------------------------------
+
+for divisions in root.xpath(
+    ".//divisions"
+):
+
+    try:
+
+        value = int(
+            divisions.text
+        )
+
+
+        if value <= 0:
+
+            divisions.text = "480"
+
+
+    except:
+
+        divisions.text = "480"
+
+
+
+# ------------------------------------------------------------
+# Remove empty lyric
+# ------------------------------------------------------------
+
+for lyric in root.xpath(
+    ".//lyric"
+):
+
+    if len(lyric) == 0:
+
+        parent = lyric.getparent()
+
+        if parent is not None:
+
+            parent.remove(lyric)
+
+
+
+# ------------------------------------------------------------
+# Save
+# ------------------------------------------------------------
+
+os.makedirs(
+    os.path.dirname(output_file),
+    exist_ok=True
+)
+
+
+
+tree.write(
+    output_file,
+    encoding="UTF-8",
+    xml_declaration=True,
+    pretty_print=True
+)
+
+
+
+print(
+    "CLEAN MUSICXML DONE:"
+)
+print(
+    output_file
+)
+
+print(
+    "========================================================"
+)
