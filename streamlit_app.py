@@ -354,7 +354,7 @@ if uploaded_file:
 
             for root,dirs,files in os.walk(
                 os.path.expanduser(
-                    "~\\AppData\\Local\\Temp"
+                    "tmp",
                 )
             ):
 
@@ -390,9 +390,7 @@ if uploaded_file:
             )
 
 
-            if os.name=="nt":
-
-                lilypond=r"C:\lilypond-2.26.0\bin\lilypond.exe"
+            if os.nam         
 
             else:
 
