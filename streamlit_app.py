@@ -3,8 +3,11 @@ import os
 import uuid
 import subprocess
 import sys
-import shutil
 
+
+# ==========================
+# Page
+# ==========================
 
 st.set_page_config(
     page_title="JianpuTool MVP 1.1",
@@ -38,6 +41,7 @@ Jianpu PDF
 )
 
 
+
 # ==========================
 # PATH
 # ==========================
@@ -61,10 +65,10 @@ os.makedirs(
 
 
 # ==========================
-# 清除舊檔
+# 清除舊產物
 # ==========================
 
-def clear_outputs():
+def clear_old_result():
 
     for f in os.listdir(OUTPUT_DIR):
 
@@ -73,9 +77,17 @@ def clear_outputs():
             f
         )
 
+
         if os.path.isfile(path):
 
-            os.remove(path)
+            if f.lower().endswith(
+                (
+                    ".pdf",
+                    ".ly"
+                )
+            ):
+
+                os.remove(path)
 
 
 
@@ -84,6 +96,8 @@ def clear_outputs():
 # ==========================
 
 def run_cmd(cmd):
+
+    st.write("執行:")
 
     st.code(
         " ".join(cmd)
@@ -98,7 +112,9 @@ def run_cmd(cmd):
     )
 
 
-    st.text(result.stdout)
+    st.text(
+        result.stdout
+    )
 
 
     if result.returncode != 0:
@@ -161,20 +177,26 @@ if uploaded:
         try:
 
 
-            # 清除舊檔
-            clear_outputs()
+            # 保留上傳檔
+            # 只清除舊結果
+
+            clear_old_result()
 
 
 
-            # -----------------
-            # MIDI
-            # -----------------
+            # ==================
+            # Audio -> MIDI
+            # ==================
 
             if uploaded.name.lower().endswith(
-                (".mid",".midi")
+                (
+                    ".mid",
+                    ".midi"
+                )
             ):
 
-                midi_file=input_file
+
+                midi_file = input_file
 
 
             else:
@@ -185,7 +207,7 @@ if uploaded:
                 )
 
 
-                midi_file=os.path.join(
+                midi_file = os.path.join(
                     OUTPUT_DIR,
                     f"{uid}.mid"
                 )
@@ -202,11 +224,26 @@ if uploaded:
 
 
 
-            # -----------------
-            # MIDI -> MusicXML
-            # -----------------
+            if not os.path.exists(
+                midi_file
+            ):
 
-            raw_xml=os.path.join(
+                raise Exception(
+                    "MIDI沒有產生"
+                )
+
+
+
+            # ==================
+            # MIDI -> MusicXML
+            # ==================
+
+            st.info(
+                "🎼 MIDI → MusicXML"
+            )
+
+
+            raw_xml = os.path.join(
                 OUTPUT_DIR,
                 f"{uid}_raw.musicxml"
             )
@@ -223,11 +260,16 @@ if uploaded:
 
 
 
-            # -----------------
-            # clean
-            # -----------------
+            # ==================
+            # Clean
+            # ==================
 
-            clean_xml=os.path.join(
+            st.info(
+                "修正 MusicXML"
+            )
+
+
+            clean_xml = os.path.join(
                 OUTPUT_DIR,
                 f"{uid}_clean.musicxml"
             )
@@ -244,11 +286,11 @@ if uploaded:
 
 
 
-            # -----------------
-            # final
-            # -----------------
+            # ==================
+            # Final Fix
+            # ==================
 
-            final_xml=os.path.join(
+            final_xml = os.path.join(
                 OUTPUT_DIR,
                 f"{uid}_final.musicxml"
             )
@@ -265,12 +307,12 @@ if uploaded:
 
 
 
-            # -----------------
+            # ==================
             # jianpu-ly
-            # -----------------
+            # ==================
 
             st.info(
-                "🎹 MusicXML → Jianpu LilyPond"
+                "🎹 MusicXML → Jianpu"
             )
 
 
@@ -285,13 +327,15 @@ if uploaded:
 
 
 
-            # 固定抓自己的 ly
+            ly_file = os.path.splitext(
+                final_xml
+            )[0] + ".ly"
 
-            ly_file = os.path.splitext(final_xml)[0] + ".ly"
 
 
-
-            if not os.path.exists(ly_file):
+            if not os.path.exists(
+                ly_file
+            ):
 
                 raise Exception(
                     f"找不到 {ly_file}"
@@ -300,17 +344,17 @@ if uploaded:
 
 
             st.success(
-                f"產生: {ly_file}"
+                f"LilyPond檔案: {ly_file}"
             )
 
 
 
-            # -----------------
-            # LilyPond
-            # -----------------
+            # ==================
+            # LilyPond PDF
+            # ==================
 
             st.info(
-                "📄 LilyPond PDF"
+                "📄 產生 PDF"
             )
 
 
@@ -325,16 +369,18 @@ if uploaded:
 
 
 
-            # 固定抓自己的 PDF
+            pdf_file = os.path.splitext(
+                ly_file
+            )[0] + ".pdf"
 
-            pdf_file = os.path.splitext(ly_file)[0] + ".pdf"
 
 
-
-            if not os.path.exists(pdf_file):
+            if not os.path.exists(
+                pdf_file
+            ):
 
                 raise Exception(
-                    "PDF產生失敗"
+                    "PDF沒有產生"
                 )
 
 
@@ -375,9 +421,11 @@ if uploaded:
 # ==========================
 
 with st.expander(
-    "outputs 檔案"
+    "檢查 outputs"
 ):
 
-    for f in os.listdir(OUTPUT_DIR):
+    for f in os.listdir(
+        OUTPUT_DIR
+    ):
 
         st.write(f)
