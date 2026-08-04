@@ -42,6 +42,7 @@ Jianpu PDF
 )
 
 
+
 # ==========================
 # PATH
 # ==========================
@@ -65,13 +66,12 @@ os.makedirs(
 
 
 # ==========================
-# Run command
+# command
 # ==========================
 
 def run_cmd(cmd):
 
     st.write("執行:")
-
     st.code(
         " ".join(cmd)
     )
@@ -91,7 +91,6 @@ def run_cmd(cmd):
 
 
     if result.returncode != 0:
-
         raise Exception(
             result.stdout
         )
@@ -99,80 +98,25 @@ def run_cmd(cmd):
 
 
 # ==========================
-# 清理舊檔
+# 找 ly
 # ==========================
 
-def clean_outputs():
-
-
-    for f in os.listdir(
-        OUTPUT_DIR
-    ):
-
-        path = os.path.join(
-            OUTPUT_DIR,
-            f
-        )
-
-
-        if (
-            f.endswith(".ly")
-            or f.endswith(".pdf")
-            or f.endswith(".musicxml")
-        ):
-
-
-            if os.path.isfile(path):
-
-                os.remove(path)
-
-
-            elif os.path.isdir(path):
-
-                shutil.rmtree(path)
-
-
-
-# ==========================
-# 找 LY
-# ==========================
-
-def find_generated_ly(uid):
-
-
-    # 優先找本次
-
-    target = os.path.join(
-        OUTPUT_DIR,
-        f"{uid}_final.ly"
-    )
-
-
-    if os.path.isfile(target):
-
-        return target
-
-
+def find_ly():
 
     latest = None
     latest_time = 0
 
 
-
-    for root, dirs, files in os.walk(
-        BASE_DIR
-    ):
+    for root, dirs, files in os.walk(BASE_DIR):
 
         for f in files:
 
             if f.endswith(".ly"):
 
-
                 path = os.path.join(
                     root,
                     f
                 )
-
 
                 t = os.path.getmtime(
                     path
@@ -185,8 +129,8 @@ def find_generated_ly(uid):
                     latest = path
 
 
-
     return latest
+
 
 
 
@@ -242,9 +186,26 @@ if uploaded:
         try:
 
 
-            # 清除舊檔
+            # 清除舊 ly/pdf
+            for root, dirs, files in os.walk(
+                OUTPUT_DIR
+            ):
 
-            clean_outputs()
+                for f in files:
+
+                    path=os.path.join(
+                        root,
+                        f
+                    )
+
+                    if os.path.isfile(path):
+
+                        if (
+                            f.endswith(".ly")
+                            or f.endswith(".pdf")
+                        ):
+
+                            os.remove(path)
 
 
 
@@ -259,20 +220,17 @@ if uploaded:
                 )
             ):
 
-
-                midi_file = input_file
-
+                midi_file=input_file
 
 
             else:
-
 
                 st.info(
                     "🎧 Audio → MIDI"
                 )
 
 
-                midi_file = os.path.join(
+                midi_file=os.path.join(
                     OUTPUT_DIR,
                     f"{uid}.mid"
                 )
@@ -289,7 +247,7 @@ if uploaded:
 
 
 
-            if not os.path.isfile(
+            if not os.path.exists(
                 midi_file
             ):
 
@@ -303,7 +261,7 @@ if uploaded:
             # MIDI → MusicXML
             # ==================
 
-            raw_xml = os.path.join(
+            raw_xml=os.path.join(
                 OUTPUT_DIR,
                 f"{uid}_raw.musicxml"
             )
@@ -324,7 +282,7 @@ if uploaded:
             # Clean
             # ==================
 
-            clean_xml = os.path.join(
+            clean_xml=os.path.join(
                 OUTPUT_DIR,
                 f"{uid}_clean.musicxml"
             )
@@ -342,28 +300,29 @@ if uploaded:
 
 
             # ==================
-            # Fix
+            # 暫時跳過 fix
             # ==================
 
-            final_xml = os.path.join(
+            final_xml=os.path.join(
                 OUTPUT_DIR,
                 f"{uid}_final.musicxml"
             )
 
 
-            run_cmd(
-                [
-                    sys.executable,
-                    "jianpu_fix_musicxml.py",
-                    clean_xml,
-                    final_xml
-                ]
+            shutil.copy(
+                clean_xml,
+                final_xml
+            )
+
+
+            st.info(
+                "跳過 jianpu_fix_musicxml.py 測試"
             )
 
 
 
             # ==================
-            # jianpu-ly
+            # MusicXML → LY
             # ==================
 
             st.info(
@@ -382,9 +341,8 @@ if uploaded:
 
 
 
-            ly_file = find_generated_ly(
-                uid
-            )
+            ly_file=find_ly()
+
 
 
             if ly_file is None:
@@ -420,13 +378,13 @@ if uploaded:
 
 
 
-            pdf_file = os.path.splitext(
+            pdf_file=os.path.splitext(
                 ly_file
-            )[0] + ".pdf"
+            )[0]+".pdf"
 
 
 
-            if not os.path.isfile(
+            if not os.path.exists(
                 pdf_file
             ):
 
@@ -435,9 +393,8 @@ if uploaded:
                 )
 
 
-
             st.success(
-                "🎉 簡譜完成!"
+                "🎉 完成!"
             )
 
 
@@ -450,9 +407,7 @@ if uploaded:
                 st.download_button(
                     "下載簡譜 PDF",
                     f,
-                    file_name=os.path.basename(
-                        pdf_file
-                    )
+                    file_name=os.path.basename(pdf_file)
                 )
 
 
@@ -481,13 +436,4 @@ with st.expander(
         OUTPUT_DIR
     ):
 
-        path = os.path.join(
-            OUTPUT_DIR,
-            f
-        )
-
-
-        st.write(
-            f,
-            "📁資料夾" if os.path.isdir(path) else "📄檔案"
-        )
+        st.write(f)
