@@ -99,7 +99,7 @@ def run_cmd(cmd):
 
 
 # ==========================
-# 找檔案
+# 找 jianpu ly
 # ==========================
 
 def find_generated_ly(uid):
@@ -175,7 +175,7 @@ if uploaded:
 
 
             # ==================
-            # MIDI
+            # Audio / MIDI
             # ==================
 
             if uploaded.name.lower().endswith(
@@ -265,7 +265,7 @@ if uploaded:
 
 
             # ==================
-            # Fix Jianpu
+            # Fix
             # ==================
 
             final_xml = os.path.join(
@@ -286,7 +286,7 @@ if uploaded:
 
 
             # ==================
-            # MusicXML → LY
+            # MusicXML → Jianpu LY
             # ==================
 
             st.info(
@@ -304,8 +304,6 @@ if uploaded:
             )
 
 
-
-            # 找真正產生的 ly
 
             ly_file = find_generated_ly(
                 uid
@@ -326,7 +324,7 @@ if uploaded:
 
 
             # ==================
-            # LilyPond
+            # LilyPond PDF
             # ==================
 
             st.info(
@@ -356,7 +354,7 @@ if uploaded:
             ):
 
                 raise Exception(
-                    f"找不到 PDF: {pdf_file}"
+                    f"PDF不存在: {pdf_file}"
                 )
 
 
@@ -366,10 +364,12 @@ if uploaded:
             )
 
 
+
             with open(
                 pdf_file,
                 "rb"
             ) as f:
+
 
                 st.download_button(
                     "下載簡譜 PDF",
