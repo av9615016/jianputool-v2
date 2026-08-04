@@ -24,7 +24,7 @@ st.write(
     BasicPitch → MIDI
 
     MIDI:
-    直接轉換
+    直接轉簡譜
     """
 )
 
@@ -46,7 +46,7 @@ os.makedirs(
 
 
 # ======================
-# 套件測試
+# 套件
 # ======================
 
 try:
@@ -54,11 +54,9 @@ try:
     from basic_pitch.inference import predict
     import music21
 
-
     st.success(
         "BasicPitch + music21 載入成功"
     )
-
 
 except Exception:
 
@@ -75,7 +73,7 @@ except Exception:
 
 
 uploaded_file = st.file_uploader(
-    "請上傳 MP3 / WAV / MIDI",
+    "上傳 MP3 / WAV / MIDI",
     type=[
         "mp3",
         "wav",
@@ -89,31 +87,20 @@ uploaded_file = st.file_uploader(
 if uploaded_file:
 
 
-    st.success(
-        f"{uploaded_file.name} 上傳完成"
-    )
-
-
-    job_id = str(uuid.uuid4())
-
-
-    # 取得副檔名
-
     ext = os.path.splitext(
         uploaded_file.name
     )[1].lower()
 
 
+    job_id = str(uuid.uuid4())
 
-    # 原始檔
+
 
     input_file = os.path.join(
         UPLOAD_DIR,
         job_id + ext
     )
 
-
-    # MIDI
 
     midi_file = os.path.join(
         OUTPUT_DIR,
@@ -123,19 +110,7 @@ if uploaded_file:
 
     raw_xml = os.path.join(
         OUTPUT_DIR,
-        job_id + "_raw.musicxml"
-    )
-
-
-    quant_xml = os.path.join(
-        OUTPUT_DIR,
-        job_id + "_quant.musicxml"
-    )
-
-
-    fixed_xml = os.path.join(
-        OUTPUT_DIR,
-        job_id + "_fixed.musicxml"
+        job_id + ".musicxml"
     )
 
 
@@ -152,8 +127,6 @@ if uploaded_file:
 
 
 
-    # 儲存上傳檔案
-
     with open(
         input_file,
         "wb"
@@ -164,17 +137,30 @@ if uploaded_file:
         )
 
 
+    st.success(
+        f"{uploaded_file.name} 上傳完成"
+    )
+
+
 
     if st.button(
         "開始轉換"
     ):
- # ======================
-        # MP3 / WAV / MIDI 分流
+
+
+
+        # ======================
+        # MP3/WAV/MIDI
         # ======================
 
         try:
 
-            if ext in [".mp3", ".wav"]:
+
+            if ext in [
+                ".mp3",
+                ".wav"
+            ]:
+
 
                 st.info(
                     "BasicPitch 分析音樂..."
@@ -192,14 +178,19 @@ if uploaded_file:
 
 
                 st.success(
-                    "MIDI 產生成功"
+                    "MIDI產生成功"
                 )
 
 
-            elif ext in [".mid", ".midi"]:
+
+            elif ext in [
+                ".mid",
+                ".midi"
+            ]:
+
 
                 st.info(
-                    "偵測到 MIDI，直接使用"
+                    "直接使用 MIDI"
                 )
 
 
@@ -210,31 +201,20 @@ if uploaded_file:
 
 
                 st.success(
-                    "MIDI 載入成功"
+                    "MIDI載入成功"
                 )
-
-
-            else:
-
-                st.error(
-                    "不支援的檔案格式"
-                )
-
-                st.stop()
-
 
 
         except Exception:
 
-            st.error(
-                "音訊/MIDI 處理失敗"
-            )
 
+            st.error(
+                "MIDI處理失敗"
+            )
 
             st.code(
                 traceback.format_exc()
             )
-
 
             st.stop()
 
@@ -246,8 +226,9 @@ if uploaded_file:
 
         try:
 
+
             st.info(
-                "MIDI 轉 MusicXML..."
+                "MIDI轉MusicXML..."
             )
 
 
@@ -265,8 +246,9 @@ if uploaded_file:
 
             if result.returncode != 0:
 
+
                 st.error(
-                    "MusicXML 產生失敗"
+                    "MusicXML失敗"
                 )
 
 
@@ -280,157 +262,34 @@ if uploaded_file:
 
 
             st.success(
-                "MusicXML 產生成功"
+                "MusicXML完成"
             )
-
 
 
         except Exception:
 
 
             st.error(
-                "MusicXML 錯誤"
+                "MusicXML錯誤"
             )
-
 
             st.code(
                 traceback.format_exc()
             )
-
-
-            st.stop()
- # ======================
-        # Final Quantize
-        # ======================
-
-        try:
-
-            st.info(
-                "節拍量化修正..."
-            )
-
-
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "final_quantize.py",
-                    raw_xml,
-                    quant_xml
-                ],
-                capture_output=True,
-                text=True
-            )
-
-
-            if result.returncode != 0:
-
-                st.error(
-                    "final_quantize 失敗"
-                )
-
-
-                st.code(
-                    result.stderr
-                )
-
-
-                st.stop()
-
-
-
-            st.success(
-                "節拍修正完成"
-            )
-
-
-
-        except Exception:
-
-
-            st.error(
-                "Quantize錯誤"
-            )
-
-
-            st.code(
-                traceback.format_exc()
-            )
-
 
             st.stop()
 
 
 
         # ======================
-        # 修正小節線
+        # MusicXML → Jianpu
         # ======================
 
         try:
 
-            st.info(
-                "修正小節線..."
-            )
-
-
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "bar_split_fix.py",
-                    quant_xml,
-                    fixed_xml
-                ],
-                capture_output=True,
-                text=True
-            )
-
-
-            if result.returncode != 0:
-
-                st.error(
-                    "小節修正失敗"
-                )
-
-
-                st.code(
-                    result.stderr
-                )
-
-
-                st.stop()
-
-
-
-            st.success(
-                "小節修正完成"
-            )
-
-
-
-        except Exception:
-
-
-            st.error(
-                "小節修正錯誤"
-            )
-
-
-            st.code(
-                traceback.format_exc()
-            )
-
-
-            st.stop()
-
-
-
-        # ======================
-        # MusicXML → Jianpu Lily
-        # ======================
-
-        try:
 
             st.info(
-                "MusicXML 轉簡譜..."
+                "MusicXML轉簡譜..."
             )
 
 
@@ -439,7 +298,7 @@ if uploaded_file:
                     sys.executable,
                     "-m",
                     "jianpu_ly",
-                    fixed_xml
+                    raw_xml
                 ],
                 capture_output=True,
                 text=True
@@ -448,15 +307,15 @@ if uploaded_file:
 
             if result.returncode != 0:
 
+
                 st.error(
-                    "jianpu_ly 失敗"
+                    "jianpu_ly失敗"
                 )
 
 
                 st.code(
                     result.stderr
                 )
-
 
                 st.stop()
 
@@ -474,7 +333,7 @@ if uploaded_file:
 
 
             st.success(
-                "簡譜 Lily 產生成功"
+                "簡譜產生成功"
             )
 
 
@@ -483,24 +342,26 @@ if uploaded_file:
 
 
             st.error(
-                "簡譜產生錯誤"
+                "簡譜錯誤"
             )
-
 
             st.code(
                 traceback.format_exc()
             )
 
-
             st.stop()
-# ======================
-        # LilyPond 產生 PDF
+
+
+
+        # ======================
+        # LilyPond PDF
         # ======================
 
         try:
 
+
             st.info(
-                "LilyPond 產生 PDF..."
+                "LilyPond產生PDF..."
             )
 
 
@@ -509,19 +370,12 @@ if uploaded_file:
             )
 
 
-            st.write(
-                "LilyPond path:",
-                lilypond
-            )
-
-
             if lilypond is None:
 
-                st.error(
-                    "找不到 LilyPond"
-                )
 
-                st.stop()
+                lilypond = (
+                    r"C:\lilypond-2.26.0\bin\lilypond.exe"
+                )
 
 
 
@@ -540,8 +394,9 @@ if uploaded_file:
 
             if result.returncode != 0:
 
+
                 st.error(
-                    "PDF產生失敗"
+                    "PDF失敗"
                 )
 
 
@@ -555,7 +410,7 @@ if uploaded_file:
 
 
             st.success(
-                "🎉 簡譜 PDF 完成"
+                "🎉 簡譜PDF完成"
             )
 
 
@@ -564,26 +419,23 @@ if uploaded_file:
 
 
             st.error(
-                "PDF錯誤"
+                "LilyPond錯誤"
             )
-
 
             st.code(
                 traceback.format_exc()
             )
-
 
             st.stop()
 
 
 
         # ======================
-        # 下載 PDF
+        # Download
         # ======================
 
-        if os.path.exists(
-            pdf_file
-        ):
+
+        if os.path.exists(pdf_file):
 
 
             with open(
@@ -593,21 +445,14 @@ if uploaded_file:
 
 
                 st.download_button(
-                    "下載簡譜 PDF",
+                    "下載簡譜PDF",
                     f,
                     file_name="jianpu.pdf",
                     mime="application/pdf"
                 )
 
 
-
-        # ======================
-        # 下載 MIDI
-        # ======================
-
-        if os.path.exists(
-            midi_file
-        ):
+        if os.path.exists(midi_file):
 
 
             with open(
@@ -617,31 +462,24 @@ if uploaded_file:
 
 
                 st.download_button(
-                    "下載 MIDI",
+                    "下載MIDI",
                     f,
                     file_name="output.mid",
                     mime="audio/midi"
                 )
 
 
-
-        # ======================
-        # 下載 MusicXML
-        # ======================
-
-        if os.path.exists(
-            fixed_xml
-        ):
+        if os.path.exists(raw_xml):
 
 
             with open(
-                fixed_xml,
+                raw_xml,
                 "rb"
             ) as f:
 
 
                 st.download_button(
-                    "下載 MusicXML",
+                    "下載MusicXML",
                     f,
                     file_name="output.musicxml",
                     mime="application/xml"
