@@ -118,17 +118,15 @@ if uploaded:
     ext = uploaded.name.lower().split(".")[-1]
 
 
+
     try:
 
 
-        # ==========================
-        # 1. Audio → MIDI
-        # ==========================
+        # ======================
+        # Audio -> MIDI
+        # ======================
 
-        if ext in [
-            "mp3",
-            "wav"
-        ]:
+        if ext in ["mp3","wav"]:
 
 
             st.info(
@@ -136,19 +134,19 @@ if uploaded:
             )
 
 
-            midi_file = os.path.join(
+            midi_file=os.path.join(
                 OUTPUT_DIR,
                 f"{job}.mid"
             )
 
 
             run_cmd(
-                [
-                    sys.executable,
-                    "basicpitch_convert.py",
-                    input_file,
-                    midi_file
-                ]
+            [
+                sys.executable,
+                "basicpitch_convert.py",
+                input_file,
+                midi_file
+            ]
             )
 
 
@@ -160,14 +158,14 @@ if uploaded:
             )
 
 
-            midi_file = input_file
+            midi_file=input_file
 
 
 
 
-        # ==========================
-        # 2. MIDI Quantize
-        # ==========================
+        # ======================
+        # MIDI Quantize
+        # ======================
 
 
         st.info(
@@ -175,30 +173,30 @@ if uploaded:
         )
 
 
-        quant_midi = os.path.join(
+        quant_midi=os.path.join(
             OUTPUT_DIR,
             f"{job}_quant.mid"
         )
 
 
         run_cmd(
-            [
-                sys.executable,
-                "midi_quantize.py",
-                midi_file,
-                quant_midi
-            ]
+        [
+            sys.executable,
+            "midi_quantize.py",
+            midi_file,
+            quant_midi
+        ]
         )
 
 
-        midi_file = quant_midi
+        midi_file=quant_midi
 
 
 
 
-        # ==========================
-        # 3. MIDI → MusicXML
-        # ==========================
+        # ======================
+        # MIDI -> MusicXML
+        # ======================
 
 
         st.info(
@@ -206,27 +204,27 @@ if uploaded:
         )
 
 
-        raw_xml = os.path.join(
+        raw_xml=os.path.join(
             OUTPUT_DIR,
             f"{job}_raw.musicxml"
         )
 
 
         run_cmd(
-            [
-                sys.executable,
-                "midi_to_musicxml_clean.py",
-                midi_file,
-                raw_xml
-            ]
+        [
+            sys.executable,
+            "midi_to_musicxml_clean.py",
+            midi_file,
+            raw_xml
+        ]
         )
 
 
 
 
-        # ==========================
-        # 4. Clean MusicXML
-        # ==========================
+        # ======================
+        # Clean
+        # ======================
 
 
         st.info(
@@ -234,55 +232,86 @@ if uploaded:
         )
 
 
-        clean_xml = os.path.join(
+        clean_xml=os.path.join(
             OUTPUT_DIR,
             f"{job}_clean.musicxml"
         )
 
 
         run_cmd(
-            [
-                sys.executable,
-                "clean_musicxml.py",
-                raw_xml,
-                clean_xml
-            ]
+        [
+            sys.executable,
+            "clean_musicxml.py",
+            raw_xml,
+            clean_xml
+        ]
         )
 
 
 
 
-        # ==========================
-        # 5. Jianpu Fix
-        # ==========================
+        # ======================
+        # Jianpu Fix
+        # ======================
 
 
         st.info(
-            "🔧 修正簡譜格式"
+            "🔧 修正MusicXML"
         )
 
 
-        final_xml = os.path.join(
+        final_xml=os.path.join(
             OUTPUT_DIR,
             f"{job}_final.musicxml"
         )
 
 
         run_cmd(
-            [
-                sys.executable,
-                "jianpu_fix_musicxml.py",
-                clean_xml,
-                final_xml
-            ]
+        [
+            sys.executable,
+            "jianpu_fix_musicxml.py",
+            clean_xml,
+            final_xml
+        ]
         )
 
 
 
 
-        # ==========================
-        # 6. Check Measure
-        # ==========================
+        # ======================
+        # Final Measure Fix
+        # ======================
+
+
+        st.info(
+            "📐 最終小節修正"
+        )
+
+
+        fixed_xml=os.path.join(
+            OUTPUT_DIR,
+            f"{job}_fixed.musicxml"
+        )
+
+
+        run_cmd(
+        [
+            sys.executable,
+            "final_measure_fix.py",
+            final_xml,
+            fixed_xml
+        ]
+        )
+
+
+        final_xml=fixed_xml
+
+
+
+
+        # ======================
+        # Check
+        # ======================
 
 
         st.info(
@@ -291,19 +320,19 @@ if uploaded:
 
 
         run_cmd(
-            [
-                sys.executable,
-                "check_measure.py",
-                final_xml
-            ]
+        [
+            sys.executable,
+            "check_measure.py",
+            final_xml
+        ]
         )
 
 
 
 
-        # ==========================
-        # 7. Jianpu LY
-        # ==========================
+        # ======================
+        # Jianpu LilyPond
+        # ======================
 
 
         st.info(
@@ -312,17 +341,17 @@ if uploaded:
 
 
         run_cmd(
-            [
-                sys.executable,
-                "-m",
-                "jianpu_ly",
-                final_xml
-            ]
+        [
+            sys.executable,
+            "-m",
+            "jianpu_ly",
+            final_xml
+        ]
         )
 
 
 
-        ly_file = final_xml.replace(
+        ly_file=final_xml.replace(
             ".musicxml",
             ".ly"
         )
@@ -330,9 +359,9 @@ if uploaded:
 
 
 
-        # ==========================
-        # 8. LilyPond PDF
-        # ==========================
+        # ======================
+        # LilyPond PDF
+        # ======================
 
 
         st.info(
@@ -341,17 +370,17 @@ if uploaded:
 
 
         run_cmd(
-            [
-                "lilypond",
-                "-o",
-                OUTPUT_DIR,
-                ly_file
-            ]
+        [
+            "lilypond",
+            "-o",
+            OUTPUT_DIR,
+            ly_file
+        ]
         )
 
 
 
-        pdf_file = ly_file.replace(
+        pdf_file=ly_file.replace(
             ".ly",
             ".pdf"
         )
@@ -362,14 +391,15 @@ if uploaded:
 
 
             st.success(
-                "🎉 簡譜PDF完成"
+                "🎉 完成"
             )
 
 
             with open(pdf_file,"rb") as f:
 
+
                 st.download_button(
-                    "下載簡譜 PDF",
+                    "下載簡譜PDF",
                     f,
                     file_name=os.path.basename(pdf_file)
                 )
@@ -377,9 +407,8 @@ if uploaded:
 
         else:
 
-
             st.error(
-                "PDF產生失敗"
+                "PDF不存在"
             )
 
 
@@ -390,6 +419,5 @@ if uploaded:
         st.error(
             "轉換錯誤"
         )
-
 
         st.exception(e)
