@@ -1,117 +1,94 @@
-# ============================================================
-# midi_to_musicxml_clean.py
-#
-# JianpuTool MVP 1.1
-#
-# MIDI -> MusicXML
-#
-# FIX:
-# output argument is FILE, not directory
-#
-# ============================================================
-
-
 import sys
 import os
-
-from music21 import converter
-from music21 import stream
-from music21 import note
-from music21 import chord
-from music21 import meter
-from music21 import tempo
+from music21 import converter, stream, note, chord, meter, tempo
 
 
+print("================ MIDI TO MUSICXML CLEAN V2 ================")
 
-print("================ MIDI TO MUSICXML CLEAN ================")
-
-
-
-# ------------------------------------------------------------
-# Arguments
-# ------------------------------------------------------------
 
 if len(sys.argv) < 3:
-
     print(
-        "Usage:"
+        "使用方式: python midi_to_musicxml_clean.py input.mid output.musicxml"
     )
-
-    print(
-        "python midi_to_musicxml_clean.py input.mid output.musicxml"
-    )
-
     sys.exit(1)
-
 
 
 midi_file = sys.argv[1]
 output_file = sys.argv[2]
 
 
-
-if not os.path.isfile(midi_file):
-
+if not os.path.exists(midi_file):
     raise Exception(
         f"MIDI not found: {midi_file}"
     )
 
 
-
-# ------------------------------------------------------------
-# Output folder
-# ------------------------------------------------------------
-
-output_dir = os.path.dirname(
-    output_file
-)
-
-
-if output_dir:
-
-    os.makedirs(
-        output_dir,
-        exist_ok=True
-    )
-
-
-
-# ------------------------------------------------------------
-# Read MIDI
-# ------------------------------------------------------------
+# =========================
+# Load MIDI
+# =========================
 
 print("讀取 MIDI...")
-
 
 score = converter.parse(
     midi_file
 )
 
 
+# =========================
+# 分析 Part
+# =========================
 
-# ------------------------------------------------------------
-# Find melody part
-# ------------------------------------------------------------
-
-print("取得 Piano Part...")
-
-
-parts = score.parts
+print("\n分析 MIDI 軌道...")
 
 
-if len(parts) > 0:
-
-    part = parts[0]
-
-else:
-
-    part = score
+best_part = None
+best_count = 0
 
 
+for i, p in enumerate(score.parts):
 
-# ------------------------------------------------------------
-# Extract notes
-# ------------------------------------------------------------
+    notes = list(
+        p.flat.notes
+    )
+
+    count = len(notes)
+
+    print(
+        "PART",
+        i,
+        "name=",
+        p.partName,
+        "notes=",
+        count
+    )
+
+
+    if count > best_count:
+
+        best_count = count
+        best_part = p
+
+
+
+if best_part is None:
+
+    raise Exception(
+        "找不到 MIDI 音符"
+    )
+
+
+print(
+    "\n選擇 Part:",
+    best_part.partName,
+    "notes:",
+    best_count
+)
+
+
+
+# =========================
+# 建立新旋律
+# =========================
 
 print("抽取旋律...")
 
@@ -119,100 +96,100 @@ print("抽取旋律...")
 melody = stream.Part()
 
 
-melody.append(
+melody.insert(
+    0,
     meter.TimeSignature("4/4")
 )
 
 
-
 # tempo
 
-melody.append(
+melody.insert(
+    0,
     tempo.MetronomeMark(
-        number=84
+        number=80
     )
 )
 
 
 
-for element in part.recurse():
+for n in best_part.flat.notes:
+
+
+    # 和弦只取最高音
 
     if isinstance(
-        element,
-        note.Note
-    ):
-
-        n = note.Note(
-            element.pitch
-        )
-
-        n.duration = element.duration
-
-        melody.append(
-            n
-        )
-
-
-    elif isinstance(
-        element,
+        n,
         chord.Chord
     ):
 
-        # 取最高音當旋律
-
-        n = note.Note(
-            element.sortAscending().notes[-1].pitch
+        new_note = note.Note(
+            n.pitches[-1]
         )
 
-        n.duration = element.duration
+        new_note.duration = n.duration
 
-        melody.append(
-            n
+
+    elif isinstance(
+        n,
+        note.Note
+    ):
+
+        new_note = note.Note(
+            n.pitch
         )
 
+        new_note.duration = n.duration
 
 
-# ------------------------------------------------------------
-# Build score
-# ------------------------------------------------------------
+    else:
 
-print("建立4/4小節...")
+        continue
 
 
-out_score = stream.Score()
+
+    melody.append(
+        new_note
+    )
 
 
-out_score.insert(
-    0,
+
+# =========================
+# 建立 Score
+# =========================
+
+new_score = stream.Score()
+
+
+new_score.append(
     melody
 )
 
 
 
-# ------------------------------------------------------------
-# Remove bad durations
-# ------------------------------------------------------------
+# =========================
+# 修正小節
+# =========================
 
-for n in melody.notes:
-
-    if n.duration.quarterLength <= 0:
-
-        n.duration.quarterLength = 1
+print("建立4/4小節...")
 
 
+new_score.makeMeasures(
+    inPlace=True
+)
 
-# ------------------------------------------------------------
-# Export
-# ------------------------------------------------------------
+
+# =========================
+# 輸出
+# =========================
 
 print("輸出 MusicXML...")
 
 
-out_score.write(
+new_score.write(
     "musicxml",
     fp=output_file
 )
-
 
 
 print(
