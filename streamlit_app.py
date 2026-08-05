@@ -2,8 +2,8 @@ import streamlit as st
 import os
 import uuid
 import subprocess
-import shutil
 import glob
+import shutil
 
 
 st.set_page_config(
@@ -34,37 +34,39 @@ def run(cmd):
 
 
 
+
+
 upload = st.file_uploader(
     "上傳 MP3",
     type=["mp3","wav"]
 )
 
 
-
 if upload:
 
 
-    work = f"outputs/{uuid.uuid4()}"
+    work = "outputs/" + str(uuid.uuid4())
 
-    os.makedirs(
+    os.makedirs(work,exist_ok=True)
+
+
+    input_file = os.path.join(
         work,
-        exist_ok=True
+        "input.mp3"
     )
 
 
-    input_audio = f"{work}/input.mp3"
-
-
-    with open(input_audio,"wb") as f:
+    with open(input_file,"wb") as f:
         f.write(upload.read())
 
 
     st.success("MP3 上傳完成")
 
 
-    #
-    # 1 Demucs 分離人聲
-    #
+
+    # ==========================
+    # Demucs
+    # ==========================
 
     st.write("🎤 分離人聲...")
 
@@ -73,64 +75,68 @@ if upload:
         "demucs",
         "-n",
         "htdemucs",
-        "--float32",
-        input_audio
+        input_file
     ])
 
 
 
-    #
-    # 搜尋 vocals.wav
-    #
+    # 搜尋 vocal
 
-    vocals_list = glob.glob(
+    vocals = glob.glob(
         "separated/**/vocals.wav",
         recursive=True
     )
 
 
-    if not vocals_list:
-
+    if not vocals:
         raise Exception(
             "找不到 vocals.wav"
         )
 
 
-    vocals = vocals_list[-1]
+    vocal_file = vocals[-1]
 
 
     st.success(
-        f"找到人聲: {vocals}"
+        f"找到人聲: {vocal_file}"
     )
 
 
 
-    #
-    # 2 BasicPitch
-    #
+    # ==========================
+    # BasicPitch
+    # ==========================
 
     st.write(
         "🎼 AI 抓 Vocal MIDI..."
     )
 
 
-    vocal_mid = f"{work}/vocal.mid"
+    vocal_mid = os.path.join(
+        work,
+        "vocal.mid"
+    )
 
 
     run([
         "python",
         "basicpitch_convert.py",
-        vocals,
+        vocal_file,
         vocal_mid
     ])
 
 
 
-    #
-    # 3 MIDI Clean
-    #
 
-    clean_mid=f"{work}/vocal_clean.mid"
+    # ==========================
+    # MIDI Clean
+    # ==========================
+
+
+    clean_mid=os.path.join(
+        work,
+        "vocal_clean.mid"
+    )
 
 
     run([
@@ -143,11 +149,15 @@ if upload:
 
 
 
-    #
-    # 4 MIDI → MusicXML V34
-    #
+    # ==========================
+    # MusicXML
+    # ==========================
 
-    musicxml=f"{work}/final.musicxml"
+
+    musicxml=os.path.join(
+        work,
+        "final.musicxml"
+    )
 
 
     run([
@@ -160,9 +170,10 @@ if upload:
 
 
 
-    #
-    # 5 Jianpu
-    #
+    # ==========================
+    # Jianpu
+    # ==========================
+
 
     st.write(
         "🎹 產生簡譜..."
@@ -184,33 +195,35 @@ if upload:
 
 
     if not ly_files:
-
         raise Exception(
-            "找不到 ly 檔"
+            "找不到 ly"
         )
 
 
-    ly=ly_files[-1]
-
-
-    pdf=f"{work}/jianpu.pdf"
+    ly_file=ly_files[-1]
 
 
 
-    #
-    # LilyPond Cloud版
-    #
+    # ==========================
+    # LilyPond PDF
+    # ==========================
+
 
     run([
         "lilypond",
-        "-o",
-        pdf.replace(".pdf",""),
-        ly
+        ly_file
     ])
 
 
 
-    if os.path.exists(pdf):
+    pdf_files=glob.glob(
+        "*.pdf"
+    )
+
+
+    if pdf_files:
+
+        pdf=pdf_files[-1]
 
         st.success(
             "完成 🎉"
@@ -222,6 +235,5 @@ if upload:
             st.download_button(
                 "下載簡譜 PDF",
                 f,
-                "jianpu.pdf",
-                "application/pdf"
+                file_name="jianpu.pdf"
             )
