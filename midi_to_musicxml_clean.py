@@ -1,12 +1,12 @@
 # ==========================================================
-# midi_to_musicxml_clean.py V30.2
+# midi_to_musicxml_clean.py V30.3
 #
 # JianpuTool
 #
 # MIDI -> MusicXML
 #
 # Melody Extractor Pro
-# Final Measure Builder
+# Final Quantize Builder
 #
 # ==========================================================
 
@@ -20,7 +20,6 @@ from music21 import chord
 from music21 import meter
 from music21 import tempo
 from music21 import duration
-
 
 
 # ----------------------------------------------------------
@@ -46,14 +45,9 @@ def find_vocal_part(score):
         if part.partName:
             name = str(part.partName).lower()
 
-
         if any(k in name for k in VOCAL_KEYS):
 
-            print(
-                "找到 Vocal Track:",
-                part.partName
-            )
-
+            print("找到 Vocal Track:", part.partName)
             return part
 
     return None
@@ -61,28 +55,22 @@ def find_vocal_part(score):
 
 
 # ----------------------------------------------------------
-# Melody Extractor Pro
+# Melody Extractor
 # ----------------------------------------------------------
 
 def extract_melody_pro(part):
 
-    print(
-        "啟動 Melody Extractor Pro"
-    )
-
+    print("啟動 Melody Extractor Pro")
 
     raw = []
 
-
     for element in part.flatten().notes:
-
 
         if isinstance(element, note.Note):
 
-            n = copy.deepcopy(element)
-
-            raw.append(n)
-
+            raw.append(
+                copy.deepcopy(element)
+            )
 
 
         elif isinstance(element, chord.Chord):
@@ -92,7 +80,6 @@ def extract_melody_pro(part):
                 key=lambda x:x.pitch.midi
             )
 
-
             n = copy.deepcopy(highest)
 
             n.offset = element.offset
@@ -100,32 +87,17 @@ def extract_melody_pro(part):
             raw.append(n)
 
 
+    print("原始音符:", len(raw))
 
-    print(
-        "原始音符:",
-        len(raw)
-    )
-
-
-    # 去低音
 
     raw = [
-
         n for n in raw
-
         if n.pitch.midi >= 55
-
     ]
 
 
-    print(
-        "移除低音後:",
-        len(raw)
-    )
+    print("移除低音後:", len(raw))
 
-
-
-    # 同時間最高音
 
     timeline = {}
 
@@ -137,16 +109,13 @@ def extract_melody_pro(part):
             2
         )
 
-
         if (
             key not in timeline
             or
             n.pitch.midi >
             timeline[key].pitch.midi
         ):
-
             timeline[key] = n
-
 
 
     melody = list(
@@ -165,16 +134,67 @@ def extract_melody_pro(part):
     )
 
 
-
     return melody
 
 
 
 # ----------------------------------------------------------
-# V30.2 Measure Builder
+# Quantize
+# ----------------------------------------------------------
+
+def quantize_length(value):
+
+    """
+    四分音符量化
+    """
+
+    choices = [
+        0.25,
+        0.5,
+        1.0,
+        2.0,
+        4.0
+    ]
+
+    return min(
+        choices,
+        key=lambda x:abs(x-value)
+    )
+
+
+
+def quantize_notes(notes):
+
+    result = []
+
+    for n in notes:
+
+        n2 = copy.deepcopy(n)
+
+        q = float(
+            n2.duration.quarterLength
+        )
+
+
+        n2.duration = duration.Duration(
+            quantize_length(q)
+        )
+
+        result.append(n2)
+
+
+    return result
+
+
+
+# ----------------------------------------------------------
+# Measure Builder
 # ----------------------------------------------------------
 
 def build_measure_score(notes):
+
+
+    notes = quantize_notes(notes)
 
 
     score = stream.Score()
@@ -197,8 +217,7 @@ def build_measure_score(notes):
 
     measure_no = 1
 
-
-    current_measure = stream.Measure(
+    measure = stream.Measure(
         number=measure_no
     )
 
@@ -206,45 +225,42 @@ def build_measure_score(notes):
     beat = 0.0
 
 
+
     for n in notes:
 
 
-        ql = float(
+        length = float(
             n.duration.quarterLength
         )
 
 
-        # 超過小節
+        # 音符超過小節
 
-        if beat + ql > 4.0:
-
-
-            rest_len = 4.0 - beat
+        if beat + length > 4.0:
 
 
-            if rest_len > 0:
+            rest_time = 4.0 - beat
 
+
+            if rest_time > 0:
 
                 r = note.Rest()
 
-
                 r.duration = duration.Duration(
-                    rest_len
+                    rest_time
                 )
 
-                current_measure.append(r)
+                measure.append(r)
 
 
 
-            part.append(
-                current_measure
-            )
+            part.append(measure)
 
 
             measure_no += 1
 
 
-            current_measure = stream.Measure(
+            measure = stream.Measure(
                 number=measure_no
             )
 
@@ -253,43 +269,33 @@ def build_measure_score(notes):
 
 
 
-        new_note = copy.deepcopy(n)
-
-
-        current_measure.append(
-            new_note
+        measure.append(
+            n
         )
 
 
-        beat += ql
+        beat += length
 
 
 
-    # 最後一小節補滿
+    # 最後補滿
 
     if beat < 4.0:
 
-
         r = note.Rest()
-
 
         r.duration = duration.Duration(
             4.0 - beat
         )
 
-
-        current_measure.append(r)
-
+        measure.append(r)
 
 
-    part.append(
-        current_measure
-    )
+
+    part.append(measure)
 
 
-    score.append(
-        part
-    )
+    score.append(part)
 
 
     return score
@@ -312,16 +318,12 @@ if __name__ == "__main__":
         sys.exit()
 
 
-
     midi_file = sys.argv[1]
 
     output = sys.argv[2]
 
 
-
-    print(
-        "讀取 MIDI..."
-    )
+    print("讀取 MIDI...")
 
 
     score = converter.parse(
@@ -335,53 +337,40 @@ if __name__ == "__main__":
     )
 
 
-
     vocal = find_vocal_part(score)
 
 
 
     if vocal:
 
-
         print(
             "模式: Vocal MIDI"
         )
 
-
         notes = [
-
             n for n in vocal.flatten().notes
-
-            if isinstance(n, note.Note)
-
+            if isinstance(n,note.Note)
         ]
 
 
-
     else:
-
 
         print(
             "沒有 Vocal Track"
         )
 
-
-        if len(score.parts) == 1:
-
+        if len(score.parts)==1:
 
             notes = extract_melody_pro(
                 score.parts[0]
             )
 
-
         else:
-
 
             best = max(
                 score.parts,
                 key=lambda p:len(p.flatten().notes)
             )
-
 
             notes = extract_melody_pro(
                 best
@@ -390,16 +379,16 @@ if __name__ == "__main__":
 
 
     print(
-        "建立 4/4 MusicXML..."
+        "建立 Quantized 4/4 MusicXML..."
     )
 
 
-    final_score = build_measure_score(
+    final = build_measure_score(
         notes
     )
 
 
-    final_score.write(
+    final.write(
         "musicxml",
         fp=output
     )
