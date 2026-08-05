@@ -1,152 +1,133 @@
+"""
+jianpu_fix_musicxml.py V19
+JianpuTool Melody Preserve Engine
+
+Purpose:
+Keep melody order.
+Only fix MusicXML structure.
+
+MusicXML
+ -> Preserve Notes
+ -> Fix Time Signature
+ -> Fix Measures
+ -> Output
+"""
+
+
 import sys
+import copy
 
-from music21 import (
-    converter,
-    stream,
-    note,
-    meter,
-    tempo,
-    duration
-)
+from music21 import converter
+from music21 import stream
+from music21 import meter
+from music21 import note
+from music21 import tempo
 
 
-INPUT = sys.argv[1]
-OUTPUT = sys.argv[2]
+
+print("==============================")
+print(" JIANPU FIX MUSICXML V19")
+print(" Melody Preserve Engine")
+print("==============================")
 
 
-print("===== V18 SAFE REBUILD ENGINE =====")
+
+if len(sys.argv) < 3:
+
+    sys.exit(
+        "python jianpu_fix_musicxml.py input.musicxml output.musicxml"
+    )
 
 
-# =========================
-# LOAD
-# =========================
+
+input_file = sys.argv[1]
+
+output_file = sys.argv[2]
+
+
+
+# ==========================
+# Load
+# ==========================
+
 
 print("load musicxml")
 
-score = converter.parse(INPUT)
+
+score = converter.parse(
+    input_file
+)
 
 
 
-# =========================
-# CREATE NEW SCORE
-# =========================
-
-new_score = stream.Score()
+# ==========================
+# Extract original notes
+# ==========================
 
 
-
-# =========================
-# EXTRACT MELODY
-# =========================
-
-print("extract melody")
+print("preserve melody")
 
 
-src = score.parts[0]
 
-melody = stream.Part()
-
-
-count = 0
+notes=[]
 
 
-for n in src.recurse().notes:
+for n in score.flatten().notes:
 
-    if isinstance(n, note.Note):
 
-        new_n = note.Note(
-            n.pitch
+    if isinstance(n,note.Note):
+
+        notes.append(
+            copy.deepcopy(n)
         )
-
-
-        ql = float(
-            n.duration.quarterLength
-        )
-
-
-        if ql <= 0:
-            continue
-
-
-        if ql > 4:
-            ql = 4
-
-
-
-        allowed = [
-            4,
-            2,
-            1,
-            0.5,
-            0.25
-        ]
-
-
-        closest = min(
-            allowed,
-            key=lambda x: abs(x-ql)
-        )
-
-
-        new_n.duration = duration.Duration(
-            closest
-        )
-
-
-        melody.append(
-            new_n
-        )
-
-
-        count += 1
 
 
 
 print(
     "notes:",
-    count
+    len(notes)
 )
 
 
 
-# =========================
-# OCTAVE FIX
-# =========================
+# ==========================
+# Show melody
+# ==========================
 
-print(
-    "limit octave"
+
+print("------------------------------")
+print("MELODY CHECK")
+
+
+for n in notes[:30]:
+
+    print(
+        n.pitch.nameWithOctave
+    )
+
+
+print("------------------------------")
+
+
+
+# ==========================
+# Rebuild Part
+# ==========================
+
+
+part = stream.Part()
+
+
+
+part.append(
+    meter.TimeSignature(
+        "4/4"
+    )
 )
 
 
-for n in melody.recurse().notes:
 
-    if n.pitch.octave < 2:
-        n.pitch.octave = 2
-
-
-    if n.pitch.octave > 6:
-        n.pitch.octave = 6
-
-
-
-
-# =========================
-# HEADER
-# =========================
-
-print(
-    "force 4/4"
-)
-
-
-melody.insert(
-    0,
-    meter.TimeSignature("4/4")
-)
-
-
-melody.insert(
-    0,
+part.append(
     tempo.MetronomeMark(
         number=80
     )
@@ -154,43 +135,53 @@ melody.insert(
 
 
 
-# =========================
-# MEASURE
-# =========================
+for n in notes:
 
-print(
-    "rebuild measures"
+
+    # 保留原音符
+
+    part.append(
+        n
+    )
+
+
+
+# ==========================
+# Make score
+# ==========================
+
+
+out = stream.Score()
+
+
+out.append(
+    part
 )
 
 
-melody = melody.makeMeasures()
 
+# ==========================
+# Write
+# ==========================
 
-
-# 加入 Score
-
-new_score.append(
-    melody
-)
-
-
-
-# =========================
-# WRITE
-# =========================
 
 print(
     "WRITE:",
-    OUTPUT
+    output_file
 )
 
 
-new_score.write(
+
+out.write(
     "musicxml",
-    fp=OUTPUT
+    fp=output_file
 )
+
 
 
 print(
     "DONE"
 )
+
+
+print("==============================")
