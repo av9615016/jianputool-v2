@@ -3,7 +3,6 @@ import os
 import uuid
 import subprocess
 import sys
-import shutil
 import traceback
 
 
@@ -18,6 +17,7 @@ st.set_page_config(
 
 
 st.title("🎵 JianpuTool MVP 1.2")
+
 
 st.write(
 """
@@ -38,8 +38,9 @@ LilyPond PDF
 )
 
 
+
 # ==========================
-# Paths
+# Directory
 # ==========================
 
 BASE_DIR = os.getcwd()
@@ -55,8 +56,9 @@ os.makedirs(
 )
 
 
+
 # ==========================
-# Helper
+# Functions
 # ==========================
 
 
@@ -67,6 +69,7 @@ def run_cmd(cmd):
         language="bash"
     )
 
+
     result = subprocess.run(
         cmd,
         stdout=subprocess.PIPE,
@@ -74,12 +77,16 @@ def run_cmd(cmd):
         text=True
     )
 
-    st.text(result.stdout)
+
+    st.text(
+        result.stdout
+    )
 
 
     if result.returncode != 0:
+
         raise Exception(
-            "Command failed"
+            "執行失敗"
         )
 
 
@@ -91,6 +98,62 @@ def check_file(path):
         raise FileNotFoundError(
             f"找不到檔案: {path}"
         )
+
+
+
+def find_file(folder, ext):
+
+    for root, dirs, files in os.walk(folder):
+
+        for f in files:
+
+            if f.lower().endswith(ext):
+
+                return os.path.join(
+                    root,
+                    f
+                )
+
+    return None
+
+
+
+def fix_lilypond_tempo(ly_file):
+
+    with open(
+        ly_file,
+        "r",
+        encoding="utf-8"
+    ) as f:
+
+        data = f.read()
+
+
+    data = data.replace(
+        "#(ly:make-moment 84 4)",
+        "84"
+    )
+
+
+    data = data.replace(
+        "#(ly:make-moment 80 4)",
+        "80"
+    )
+
+
+    data = data.replace(
+        "#(ly:make-moment 120 4)",
+        "120"
+    )
+
+
+    with open(
+        ly_file,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        f.write(data)
 
 
 
@@ -129,6 +192,7 @@ if uploaded:
     )
 
 
+
     input_file = os.path.join(
         job_dir,
         uploaded.name
@@ -150,25 +214,25 @@ if uploaded:
     )
 
 
+
     if st.button(
-        "🎼 開始轉換簡譜"
+        "🎼 開始轉換"
     ):
 
 
         try:
 
 
-            st.info(
-                "開始處理..."
-            )
+            # =====================
+            # Audio -> MIDI
+            # =====================
 
-
-            # ---------------------
-            # MIDI
-            # ---------------------
 
             if uploaded.name.lower().endswith(
-                (".mp3",".wav")
+                (
+                    ".mp3",
+                    ".wav"
+                )
             ):
 
 
@@ -190,7 +254,6 @@ if uploaded:
 
             else:
 
-
                 midi_file = input_file
 
 
@@ -206,9 +269,9 @@ if uploaded:
 
 
 
-            # ---------------------
+            # =====================
             # MIDI -> MusicXML
-            # ---------------------
+            # =====================
 
 
             raw_xml = os.path.join(
@@ -227,13 +290,15 @@ if uploaded:
             )
 
 
-            check_file(raw_xml)
+            check_file(
+                raw_xml
+            )
 
 
 
-            # ---------------------
-            # Clean XML
-            # ---------------------
+            # =====================
+            # Clean
+            # =====================
 
 
             clean_xml = os.path.join(
@@ -252,13 +317,15 @@ if uploaded:
             )
 
 
-            check_file(clean_xml)
+            check_file(
+                clean_xml
+            )
 
 
 
-            # ---------------------
-            # Jianpu Fix
-            # ---------------------
+            # =====================
+            # Fix
+            # =====================
 
 
             final_xml = os.path.join(
@@ -277,13 +344,21 @@ if uploaded:
             )
 
 
-            check_file(final_xml)
+            check_file(
+                final_xml
+            )
 
 
 
-            # ---------------------
+            st.success(
+                "MusicXML 完成"
+            )
+
+
+
+            # =====================
             # jianpu-ly
-            # ---------------------
+            # =====================
 
 
             run_cmd(
@@ -297,21 +372,36 @@ if uploaded:
 
 
 
-            ly_file = final_xml.replace(
-                ".musicxml",
+            ly_file = find_file(
+                job_dir,
                 ".ly"
             )
 
 
-            check_file(
+            if ly_file is None:
+
+                raise FileNotFoundError(
+                    "找不到 jianpu-ly 產生的 .ly"
+                )
+
+
+            st.success(
+                f"找到LY: {ly_file}"
+            )
+
+
+
+            # 修正 tempo
+
+            fix_lilypond_tempo(
                 ly_file
             )
 
 
 
-            # ---------------------
-            # LilyPond
-            # ---------------------
+            # =====================
+            # LilyPond PDF
+            # =====================
 
 
             run_cmd(
@@ -323,25 +413,26 @@ if uploaded:
             )
 
 
-            pdf_file = ly_file.replace(
-                ".ly",
+
+            pdf_file = find_file(
+                job_dir,
                 ".pdf"
             )
 
 
-            check_file(
-                pdf_file
-            )
+
+            if pdf_file is None:
+
+                raise FileNotFoundError(
+                    "LilyPond 沒有產生PDF"
+                )
 
 
 
             st.success(
-                "🎉 簡譜 PDF 完成!"
+                "🎉 簡譜PDF完成!"
             )
 
-
-
-            # Download
 
 
             with open(
@@ -352,7 +443,7 @@ if uploaded:
 
                 st.download_button(
 
-                    label="📥 下載簡譜 PDF",
+                    label="📥 下載簡譜PDF",
 
                     data=f,
 
@@ -368,7 +459,7 @@ if uploaded:
 
 
             st.error(
-                "轉換失敗"
+                "❌ 轉換失敗"
             )
 
 
