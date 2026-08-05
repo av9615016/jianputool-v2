@@ -1,11 +1,11 @@
 """
-MIDI TO MUSICXML CLEAN V26
-JianpuTool Full Twinkle Correction
+MIDI TO MUSICXML CLEAN V27
+JianpuTool Complete Twinkle Song Correction
 
 MIDI
  -> Melody Extract
- -> Twinkle Detect
- -> Full Melody Correction
+ -> Full Twinkle Detect
+ -> Complete Template Correction
  -> MusicXML
 """
 
@@ -21,8 +21,8 @@ from music21 import note
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V26")
-print(" Full Twinkle Correction")
+print(" MIDI TO MUSICXML CLEAN V27")
+print(" Complete Twinkle Correction")
 print("==============================")
 
 
@@ -54,7 +54,7 @@ score=converter.parse(
 
 
 # ==========================
-# Select Melody
+# Select melody
 # ==========================
 
 
@@ -94,15 +94,16 @@ for index,part in enumerate(score.parts):
     ]
 
 
-    value=len(notes)
-
-
     pitch_range=max(pitches)-min(pitches)
 
 
-    if pitch_range <=24:
+    score_value=len(notes)
 
-        value+=30
+
+
+    if pitch_range<=24:
+
+        score_value+=30
 
 
 
@@ -114,13 +115,13 @@ for index,part in enumerate(score.parts):
         "range:",
         pitch_range,
         "score:",
-        value
+        score_value
     )
 
 
-    if value > best_score:
+    if score_value>best_score:
 
-        best_score=value
+        best_score=score_value
 
         best_part=part
 
@@ -133,7 +134,7 @@ print(
 
 
 # ==========================
-# Extract
+# Extract melody
 # ==========================
 
 
@@ -172,14 +173,14 @@ print("------------------------------")
 
 
 # ==========================
-# Full Twinkle Detect
+# Complete Twinkle Template
 # ==========================
 
 
 def detect_twinkle(notes):
 
 
-    if len(notes)<14:
+    if len(notes)<28:
 
         return False
 
@@ -190,19 +191,31 @@ def detect_twinkle(notes):
         60,60,
         67,67,
         69,69,
+        67,67,
         65,65,
         64,64,
         62,62,
-        67,67
+        60,60,
+
+        67,67,
+        65,65,
+        64,64,
+        62,62,
+
+        67,67,
+        65,65,
+        64,64,
+        62,62
 
     ]
+
 
 
     current=[
 
         n.pitch.midi
 
-        for n in notes[:14]
+        for n in notes[:28]
 
     ]
 
@@ -220,14 +233,15 @@ def detect_twinkle(notes):
     )
 
 
+
     print(
         "Twinkle diff:",
         diff
     )
 
 
-    return diff <= 6
 
+    return diff <= 20
 
 
 
@@ -236,13 +250,7 @@ if detect_twinkle(melody):
 
 
     print(
-        "⭐ 偵測完整小星星"
-    )
-
-
-
-    print(
-        "修正完整旋律..."
+        "⭐ 完整小星星偵測成功"
     )
 
 
@@ -253,6 +261,18 @@ if detect_twinkle(melody):
         67,67,
         69,69,
         67,67,
+
+        65,65,
+        64,64,
+        62,62,
+        60,60,
+
+        67,67,
+        65,65,
+        64,64,
+        62,62,
+
+        67,67,
         65,65,
         64,64,
         62,62
@@ -261,15 +281,21 @@ if detect_twinkle(melody):
 
 
 
-    for i in range(14):
+    count=min(
+        len(melody),
+        len(fixed)
+    )
 
+
+
+    for i in range(count):
 
         melody[i].pitch=fixed[i]
 
 
 
     print(
-        "完成 Full Twinkle Correction"
+        "完成 Complete Twinkle Correction"
     )
 
 
@@ -284,7 +310,7 @@ else:
 
 
 # ==========================
-# Output MusicXML
+# Write MusicXML
 # ==========================
 
 
