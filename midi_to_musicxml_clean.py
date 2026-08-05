@@ -1,7 +1,7 @@
 # ==========================================================
-# midi_to_musicxml_clean.py V32
+# midi_to_musicxml_clean.py V32.1
 #
-# Dynamic Programming Melody Path
+# Dynamic Programming Melody Path FIX
 #
 # ==========================================================
 
@@ -17,6 +17,7 @@ from music21 import tempo
 from music21 import duration
 
 
+
 VOCAL_KEYS = [
     "vocal",
     "voice",
@@ -27,17 +28,28 @@ VOCAL_KEYS = [
 ]
 
 
+
 # ----------------------------------------------------------
-# 找 Vocal
+# Vocal
 # ----------------------------------------------------------
 
 def find_vocal(score):
 
     for part in score.parts:
 
-        name = str(part.partName).lower()
+        name = ""
+
+        if part.partName:
+            name = str(part.partName).lower()
+
 
         if any(k in name for k in VOCAL_KEYS):
+
+            print(
+                "找到 Vocal:",
+                part.partName
+            )
+
             return part
 
     return None
@@ -45,7 +57,7 @@ def find_vocal(score):
 
 
 # ----------------------------------------------------------
-# 建立候選音
+# Candidates
 # ----------------------------------------------------------
 
 def collect_candidates(part):
@@ -56,41 +68,50 @@ def collect_candidates(part):
     for e in part.flatten().notes:
 
 
-        notes=[]
+        elements=[]
 
 
         if isinstance(e,note.Note):
 
-            notes=[e]
+            elements=[e]
 
 
         elif isinstance(e,chord.Chord):
 
-            notes=e.notes
+            elements=e.notes
 
 
 
-        for n in notes:
+        for n in elements:
 
 
-            if 55 <= n.pitch.midi <= 84:
+            nn=copy.deepcopy(n)
+
+            nn.offset=e.offset
 
 
-                nn=copy.deepcopy(n)
-
-                nn.offset=e.offset
+            pitch=nn.pitch.midi
 
 
-                t=round(
-                    float(e.offset),
-                    2
-                )
+            # 人聲範圍
+
+            if 55 <= pitch <= 84:
 
 
-                groups.setdefault(
-                    t,
-                    []
-                ).append(nn)
+                # 太短降低權重
+                if float(nn.duration.quarterLength) >= 0.125:
+
+
+                    t=round(
+                        float(e.offset),
+                        2
+                    )
+
+
+                    groups.setdefault(
+                        t,
+                        []
+                    ).append(nn)
 
 
 
@@ -105,7 +126,7 @@ def collect_candidates(part):
 
 
     print(
-        "候選時間點:",
+        "候選時間:",
         len(timeline)
     )
 
@@ -115,62 +136,63 @@ def collect_candidates(part):
 
 
 # ----------------------------------------------------------
-# Dynamic Programming Melody Path
+# Scoring
 # ----------------------------------------------------------
 
-def pitch_score(n):
+def note_score(n):
 
-    p=n.pitch.midi
-
-
-    # 人聲中心 C4-C5
-
-    return 10 - abs(
-        p-72
-    )*0.15
+    pitch=n.pitch.midi
 
 
+    # 人聲中心附近較高
 
-def duration_score(n):
+    score=10-abs(
+        pitch-72
+    )*0.2
 
-    d=float(
+
+    length=float(
         n.duration.quarterLength
     )
 
-    return min(
-        d,
+
+    score += min(
+        length,
         2
     )
 
 
+    return score
 
-def transition_score(a,b):
+
+
+def jump_score(a,b):
 
     jump=abs(
-        b.pitch.midi-
-        a.pitch.midi
+        a.pitch.midi-
+        b.pitch.midi
     )
 
-
-    # 小跳最佳
 
     if jump<=5:
         return 5
 
-
     if jump<=12:
         return 1
-
 
     return -8
 
 
 
-def dynamic_melody(groups):
+# ----------------------------------------------------------
+# DP with Skip
+# ----------------------------------------------------------
+
+def dynamic_path(groups):
 
 
     print(
-        "Dynamic Programming Tracking"
+        "Dynamic Programming Melody Path"
     )
 
 
@@ -178,8 +200,8 @@ def dynamic_melody(groups):
         return []
 
 
-    dp=[]
 
+    dp=[]
 
     parent=[]
 
@@ -187,42 +209,38 @@ def dynamic_melody(groups):
 
     # 第一層
 
-    first=[]
+    dp.append(
+        [
+            note_score(n)
+            for n in groups[0]
+        ]
+    )
 
-
-    for n in groups[0]:
-
-        first.append(
-            pitch_score(n)
-            +
-            duration_score(n)
-        )
-
-
-    dp.append(first)
 
     parent.append(
-        [-1]*len(first)
+        [
+            -1
+            for n in groups[0]
+        ]
     )
 
 
 
-    # 後續
-
     for i in range(1,len(groups)):
 
 
-        scores=[]
+        current=[]
 
-        parents=[]
+        current_parent=[]
 
 
         for j,n in enumerate(groups[i]):
 
 
-            best=-999
+            best=-99999
 
             best_k=-1
+
 
 
             for k,prev in enumerate(groups[i-1]):
@@ -234,18 +252,14 @@ def dynamic_melody(groups):
 
                     +
 
-                    transition_score(
+                    jump_score(
                         prev,
                         n
                     )
 
                     +
 
-                    pitch_score(n)
-
-                    +
-
-                    duration_score(n)
+                    note_score(n)
 
                 )
 
@@ -257,23 +271,39 @@ def dynamic_melody(groups):
 
 
 
-            scores.append(best)
+            # skip penalty
 
-            parents.append(best_k)
+            if best < -5:
+
+                continue
 
 
 
-        dp.append(scores)
+            current.append(best)
 
-        parent.append(parents)
+            current_parent.append(best_k)
+
+
+
+        if current:
+
+            dp.append(current)
+
+            parent.append(
+                current_parent
+            )
 
 
 
     # 回溯
 
-    index=max(
+    if not dp:
+        return []
+
+
+    idx=max(
         range(len(dp[-1])),
-        key=lambda i:dp[-1][i]
+        key=lambda x:dp[-1][x]
     )
 
 
@@ -281,20 +311,21 @@ def dynamic_melody(groups):
 
 
     for i in range(
-        len(groups)-1,
+        len(dp)-1,
         -1,
         -1
     ):
 
-        result.append(
-            groups[i][index]
-        )
+        if idx < len(groups[i]):
 
-        index=parent[i][index]
+            result.append(
+                groups[i][idx]
+            )
 
 
-        if index<0:
-            break
+        if i>0 and idx < len(parent[i]):
+
+            idx=parent[i][idx]
 
 
 
@@ -312,13 +343,36 @@ def dynamic_melody(groups):
 
 
 # ----------------------------------------------------------
-# 建立 MusicXML
+# Safe Rest
+# ----------------------------------------------------------
+
+def make_rest(length):
+
+    if length <=0:
+        return None
+
+
+    r=note.Rest()
+
+
+    r.duration=duration.Duration(
+        length
+    )
+
+
+    return r
+
+
+
+# ----------------------------------------------------------
+# MusicXML
 # ----------------------------------------------------------
 
 def build_xml(notes):
 
 
     score=stream.Score()
+
 
     part=stream.Part()
 
@@ -341,66 +395,76 @@ def build_xml(notes):
     beat=0
 
 
+
     for n in notes:
 
 
-        q=copy.deepcopy(n)
+        n2=copy.deepcopy(n)
 
 
-        q.duration=duration.Duration(
-            min(
-                float(q.duration.quarterLength),
-                2
-            )
+        q=min(
+            float(n2.duration.quarterLength),
+            2
         )
 
 
-        length=float(
-            q.duration.quarterLength
-        )
+        n2.duration=duration.Duration(q)
 
 
-        if beat+length>4:
 
-            r=note.Rest()
+        if beat+q>4:
 
-            r.duration=duration.Duration(
+
+            r=make_rest(
                 4-beat
             )
 
-            measure.append(r)
 
-            part.append(measure)
+            if r:
+                measure.append(r)
+
+
+            part.append(
+                measure
+            )
+
 
             measure=stream.Measure(
                 number=measure.number+1
             )
 
+
             beat=0
 
 
 
-        measure.append(q)
-
-        beat+=length
-
-
-
-    if beat<4:
-
-        r=note.Rest()
-
-        r.duration=duration.Duration(
-            4-beat
+        measure.append(
+            n2
         )
 
+
+        beat+=q
+
+
+
+    r=make_rest(
+        4-beat
+    )
+
+
+    if r:
         measure.append(r)
 
 
 
-    part.append(measure)
+    part.append(
+        measure
+    )
 
-    score.append(part)
+
+    score.append(
+        part
+    )
 
 
     return score
@@ -419,11 +483,14 @@ if __name__=="__main__":
     out=sys.argv[2]
 
 
-    print("讀取 MIDI")
+    print(
+        "讀取 MIDI"
+    )
 
 
-    score=converter.parse(midi)
-
+    score=converter.parse(
+        midi
+    )
 
 
     vocal=find_vocal(score)
@@ -432,15 +499,18 @@ if __name__=="__main__":
 
     if vocal:
 
+
         notes=[
             n for n in vocal.flatten().notes
             if isinstance(n,note.Note)
         ]
 
+
     else:
 
+
         print(
-            "使用 Dynamic Melody Path"
+            "單軌 Melody Tracking"
         )
 
 
@@ -452,7 +522,7 @@ if __name__=="__main__":
         )
 
 
-        notes=dynamic_melody(
+        notes=dynamic_path(
             groups
         )
 
