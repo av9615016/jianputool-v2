@@ -1,9 +1,7 @@
-basic-pitch==0.4.0
-music21==9.1.0
-jianpu-ly==1.872
+streamlit
 demucs
-mido
+basic-pitch==0.4.0
+music21
+jianpu-ly
 lxml
 numpy==1.26.4
-soundfile
-librosa
