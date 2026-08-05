@@ -1,215 +1,176 @@
-# ============================================================
-# clean_musicxml.py
-#
-# JianpuTool MVP 1.1
-# CLEAN MUSICXML V34 FIX
-#
-# Input:
-#   raw.musicxml
-#
-# Output:
-#   clean.musicxml
-#
-# ============================================================
+"""
+clean_musicxml.py V35
+JianpuTool Melody Preserve Cleaner
+
+Purpose:
+Keep original melody.
+Only clean MusicXML structure.
+
+MusicXML
+ -> Preserve Notes
+ -> Force 4/4
+ -> Output
+"""
 
 
 import sys
-import os
-from lxml import etree
+import copy
 
 
-print("================ CLEAN MUSICXML V34 FIX ================")
+from music21 import converter
+from music21 import stream
+from music21 import meter
+from music21 import tempo
+from music21 import note
 
 
-# ------------------------------------------------------------
-# Check arguments
-# ------------------------------------------------------------
+
+print("==============================")
+print(" CLEAN MUSICXML V35")
+print(" Melody Preserve Cleaner")
+print("==============================")
+
+
 
 if len(sys.argv) < 3:
 
-    print(
-        "Usage:"
-    )
-
-    print(
+    sys.exit(
         "python clean_musicxml.py input.musicxml output.musicxml"
     )
-
-    sys.exit(1)
 
 
 
 input_file = sys.argv[1]
+
 output_file = sys.argv[2]
 
 
 
-# ------------------------------------------------------------
-# Path check
-# ------------------------------------------------------------
-
-if not os.path.isfile(input_file):
-
-    raise Exception(
-        f"Input MusicXML not found: {input_file}"
-    )
+# ==========================
+# Load
+# ==========================
 
 
-if os.path.isdir(output_file):
-
-    raise Exception(
-        f"Output path is directory, need file: {output_file}"
-    )
+print("讀取 MusicXML...")
 
 
-
-# ------------------------------------------------------------
-# Load XML
-# ------------------------------------------------------------
-
-parser = etree.XMLParser(
-    remove_blank_text=True
+score = converter.parse(
+    input_file
 )
 
 
-tree = etree.parse(
-    input_file,
-    parser
-)
+
+# ==========================
+# Preserve Notes
+# ==========================
 
 
-root = tree.getroot()
+print("保留旋律...")
 
 
-
-# ------------------------------------------------------------
-# Remove unnecessary elements
-# ------------------------------------------------------------
-
-remove_tags = [
-
-    "encoding",
-
-    "supports",
-
-    "software",
-
-    "creator"
-
-]
-
-
-for tag in remove_tags:
-
-    for node in root.xpath(
-        f".//{tag}"
-    ):
-
-        parent = node.getparent()
-
-        if parent is not None:
-
-            parent.remove(node)
+notes=[]
 
 
 
-# ------------------------------------------------------------
-# Fix duration
-# ------------------------------------------------------------
+for n in score.flatten().notes:
 
-for duration in root.xpath(
-    ".//duration"
-):
 
-    try:
+    if isinstance(n,note.Note):
 
-        value = int(
-            duration.text
+
+        notes.append(
+            copy.deepcopy(n)
         )
-
-
-        if value <= 0:
-
-            duration.text = "1"
-
-
-    except:
-
-        duration.text = "1"
-
-
-
-# ------------------------------------------------------------
-# Fix divisions
-# ------------------------------------------------------------
-
-for divisions in root.xpath(
-    ".//divisions"
-):
-
-    try:
-
-        value = int(
-            divisions.text
-        )
-
-
-        if value <= 0:
-
-            divisions.text = "480"
-
-
-    except:
-
-        divisions.text = "480"
-
-
-
-# ------------------------------------------------------------
-# Remove empty lyric
-# ------------------------------------------------------------
-
-for lyric in root.xpath(
-    ".//lyric"
-):
-
-    if len(lyric) == 0:
-
-        parent = lyric.getparent()
-
-        if parent is not None:
-
-            parent.remove(lyric)
-
-
-
-# ------------------------------------------------------------
-# Save
-# ------------------------------------------------------------
-
-os.makedirs(
-    os.path.dirname(output_file),
-    exist_ok=True
-)
-
-
-
-tree.write(
-    output_file,
-    encoding="UTF-8",
-    xml_declaration=True,
-    pretty_print=True
-)
 
 
 
 print(
-    "CLEAN MUSICXML DONE:"
+    "保留音符:",
+    len(notes)
 )
+
+
+
+print("------------------------------")
+print("旋律確認:")
+
+
+for n in notes[:20]:
+
+    print(
+        n.pitch.nameWithOctave
+    )
+
+
+print("------------------------------")
+
+
+
+# ==========================
+# Build Clean Score
+# ==========================
+
+
+part = stream.Part()
+
+
+
+part.append(
+    meter.TimeSignature(
+        "4/4"
+    )
+)
+
+
+
+part.append(
+    tempo.MetronomeMark(
+        number=80
+    )
+)
+
+
+
+for n in notes:
+
+
+    part.append(
+        n
+    )
+
+
+
+out = stream.Score()
+
+
+out.append(
+    part
+)
+
+
+
+# ==========================
+# Write
+# ==========================
+
+
 print(
+    "輸出:",
     output_file
 )
 
-print(
-    "========================================================"
+
+
+out.write(
+    "musicxml",
+    fp=output_file
 )
+
+
+
+print(
+    "CLEAN MUSICXML DONE"
+)
+
+
+print("==============================")
