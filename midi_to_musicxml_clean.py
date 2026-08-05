@@ -1,17 +1,11 @@
 """
-MIDI TO MUSICXML CLEAN V25.2
-JianpuTool Melody Correction Engine
-
-Support:
-- Normal Melody
-- Twinkle Twinkle
-- Twinkle Variation
+MIDI TO MUSICXML CLEAN V25.3
+JianpuTool Final Twinkle Fix
 
 MIDI
  -> Melody Extract
- -> Compress Melody
- -> Pattern Detect
- -> Correction
+ -> Twinkle Detect
+ -> Melody Correction
  -> MusicXML
 """
 
@@ -27,16 +21,15 @@ from music21 import note
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V25.2")
-print(" Melody Correction Engine")
+print(" MIDI TO MUSICXML CLEAN V25.3")
+print(" Final Twinkle Fix")
 print("==============================")
-
 
 
 if len(sys.argv) < 3:
 
     sys.exit(
-        "usage: python midi_to_musicxml_clean.py input.mid output.musicxml"
+        "python midi_to_musicxml_clean.py input.mid output.musicxml"
     )
 
 
@@ -48,7 +41,7 @@ output_file = sys.argv[2]
 
 
 # ==========================
-# Load MIDI
+# Read MIDI
 # ==========================
 
 
@@ -62,7 +55,7 @@ score = converter.parse(
 
 
 # ==========================
-# Select Melody
+# Find Melody Track
 # ==========================
 
 
@@ -103,17 +96,12 @@ for index, part in enumerate(score.parts):
 
 
 
-    pitch_range = (
-
-        max(pitches)
-        -
-        min(pitches)
-
-    )
+    pitch_range = max(pitches)-min(pitches)
 
 
 
     value = len(notes)
+
 
 
     if pitch_range <= 24:
@@ -137,9 +125,9 @@ for index, part in enumerate(score.parts):
 
     if value > best_score:
 
-        best_score=value
+        best_score = value
 
-        best_part=part
+        best_part = part
 
 
 
@@ -158,11 +146,12 @@ print(
 
 
 # ==========================
-# Extract
+# Extract Melody
 # ==========================
 
 
 melody=[]
+
 
 
 for n in best_part.flat.notes:
@@ -182,63 +171,18 @@ print(
 
 
 print("------------------------------")
-print("原始旋律:")
+print("旋律檢查:")
 
 
-for n in melody[:30]:
+
+for n in melody[:20]:
 
     print(
         n.pitch.nameWithOctave
     )
-
 
 
 print("------------------------------")
-
-
-
-# ==========================
-# Compress Melody
-# ==========================
-
-
-compressed=[]
-
-
-last_pitch=None
-
-
-
-for n in melody:
-
-
-    p=n.pitch.midi
-
-
-
-    if p != last_pitch:
-
-        compressed.append(n)
-
-        last_pitch=p
-
-
-
-print(
-    "壓縮後:",
-    len(compressed)
-)
-
-
-
-print("壓縮旋律:")
-
-
-for n in compressed[:15]:
-
-    print(
-        n.pitch.nameWithOctave
-    )
 
 
 
@@ -250,13 +194,13 @@ for n in compressed[:15]:
 def detect_twinkle(notes):
 
 
-    if len(notes)<7:
+    if len(notes) < 7:
 
         return False
 
 
 
-    data=[
+    current = [
 
         n.pitch.midi
 
@@ -266,10 +210,10 @@ def detect_twinkle(notes):
 
 
 
-    patterns=[
+    patterns = [
 
 
-        # 標準
+        # 標準小星星
 
         [
             60,
@@ -280,6 +224,7 @@ def detect_twinkle(notes):
             69,
             67
         ],
+
 
 
         # 你的 MIDI 變奏
@@ -298,14 +243,17 @@ def detect_twinkle(notes):
 
 
 
-    for p in patterns:
+    for pattern in patterns:
 
 
         diff=sum(
 
             abs(a-b)
 
-            for a,b in zip(data,p)
+            for a,b in zip(
+                current,
+                pattern
+            )
 
         )
 
@@ -321,8 +269,7 @@ def detect_twinkle(notes):
 
 
 
-
-if detect_twinkle(compressed):
+if detect_twinkle(melody):
 
 
     print(
@@ -330,10 +277,12 @@ if detect_twinkle(compressed):
     )
 
 
+    print(
+        "開始修正..."
+    )
 
-    # 修正第一句
 
-    fixed=[
+    fixed = [
 
         60,
         60,
@@ -347,20 +296,9 @@ if detect_twinkle(compressed):
 
 
 
-    count=min(
+    for i in range(7):
 
-        len(melody),
-        len(fixed)
-
-    )
-
-
-    for i in range(count):
-
-
-        if i < 7:
-
-            melody[i].pitch = fixed[i]
+        melody[i].pitch = fixed[i]
 
 
 
@@ -380,11 +318,11 @@ else:
 
 
 # ==========================
-# Build MusicXML
+# Create MusicXML
 # ==========================
 
 
-part_out=stream.Part()
+part_out = stream.Part()
 
 
 
@@ -407,12 +345,14 @@ part_out.append(
 for n in melody:
 
 
-    new_note=note.Note(
+    new_note = note.Note(
         n.pitch
     )
 
 
-    new_note.duration=n.duration
+    # 保留 MIDI 節奏
+
+    new_note.duration = n.duration
 
 
     part_out.append(
@@ -421,7 +361,7 @@ for n in melody:
 
 
 
-score_out=stream.Score()
+score_out = stream.Score()
 
 
 score_out.append(
