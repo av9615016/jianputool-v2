@@ -1,299 +1,299 @@
-# midi_to_musicxml_clean.py
-#
-# JianpuTool
-# MIDI -> MusicXML
-# V20.4 Jianpu PDF Clean Engine
+MIDI TO MUSICXML CLEAN V21
+JianpuTool Melody Lock Engine
 
+MIDI
+ ↓
+選擇旋律 Track
+ ↓
+去重複
+ ↓
+旋律抽取
+ ↓
+MusicXML
+"""
 
 import sys
-
-from music21 import (
-    converter,
-    stream,
-    note,
-    meter,
-    tempo,
-    duration,
-    clef,
-    key
-)
-
-
-INPUT = sys.argv[1]
-OUTPUT = sys.argv[2]
+from music21 import converter
+from music21 import stream
+from music21 import meter
+from music21 import note
+from music21 import tempo
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V20.4")
-print(" Jianpu PDF Clean Engine")
+print(" MIDI TO MUSICXML CLEAN V21")
+print(" Melody Lock Engine")
 print("==============================")
 
 
-# =========================
-# LOAD MIDI
-# =========================
+if len(sys.argv) < 3:
+
+    print(
+        "用法: python midi_to_musicxml_clean.py input.mid output.musicxml"
+    )
+
+    sys.exit()
+
+
+
+midi_file = sys.argv[1]
+
+output_file = sys.argv[2]
+
+
+
+# ==========================
+# Load MIDI
+# ==========================
+
 
 print("讀取 MIDI...")
 
-src = converter.parse(INPUT)
+
+score = converter.parse(
+    midi_file
+)
 
 
 
-# =========================
-# SELECT MELODY
-# =========================
-
-print("選擇旋律軌...")
+# ==========================
+# Analyze Tracks
+# ==========================
 
 
-best = None
-max_notes = 0
+print("分析 MIDI 軌...")
 
 
-for p in src.parts:
+best_part = None
 
-    c = len(
-        list(
-            p.recurse().notes
-        )
+best_score = -1
+
+
+
+for i, part in enumerate(score.parts):
+
+
+    notes = [
+        n for n in part.flat.notes
+        if isinstance(n, note.Note)
+    ]
+
+
+    count = len(notes)
+
+
+    if count == 0:
+        continue
+
+
+
+    # 音域
+
+    pitches = [
+        n.pitch.midi
+        for n in notes
+    ]
+
+
+    pitch_range = max(pitches)-min(pitches)
+
+
+
+    # 主旋律評分
+
+    score_value = (
+        count
+        + pitch_range * 2
     )
 
 
-    if c > max_notes:
+    print(
+        "TRACK",
+        i,
+        "notes:",
+        count,
+        "range:",
+        pitch_range
+    )
 
-        max_notes = c
-        best = p
+
+    if score_value > best_score:
+
+        best_score = score_value
+
+        best_part = part
 
 
 
-if best is None:
+if best_part is None:
+
     raise Exception(
-        "無旋律"
+        "找不到旋律"
     )
+
+
+
+print(
+    "選擇旋律 Track"
+)
+
+
+
+# ==========================
+# Extract Melody
+# ==========================
+
+
+melody_notes = []
+
+
+for n in best_part.flat.notes:
+
+
+    if isinstance(n, note.Note):
+
+        melody_notes.append(n)
+
 
 
 print(
     "原始音符:",
-    max_notes
+    len(melody_notes)
 )
 
 
 
-# =========================
-# CREATE PART
-# =========================
-
-part = stream.Part()
-
-part.partName = "Melody"
+# ==========================
+# Remove duplicate
+# ==========================
 
 
-part.insert(
-    0,
+clean_notes = []
+
+
+last_pitch = None
+last_offset = None
+
+
+
+for n in melody_notes:
+
+
+    p = n.pitch.midi
+
+
+    o = round(
+        n.offset,
+        3
+    )
+
+
+    if (
+        p == last_pitch
+        and o == last_offset
+    ):
+        continue
+
+
+
+    clean_notes.append(n)
+
+
+    last_pitch = p
+
+    last_offset = o
+
+
+
+print(
+    "去重後:",
+    len(clean_notes)
+)
+
+
+
+# ==========================
+# Keep Melody
+# ==========================
+
+
+result = stream.Part()
+
+
+result.append(
     meter.TimeSignature("4/4")
 )
 
 
-part.insert(
-    0,
+result.append(
     tempo.MetronomeMark(
         number=80
     )
 )
 
 
-part.insert(
-    0,
-    clef.TrebleClef()
-)
 
-
-part.insert(
-    0,
-    key.Key("C")
-)
+current = 0
 
 
 
-count = 0
+for n in clean_notes:
 
 
-
-# =========================
-# COPY NOTES ONLY
-# =========================
-
-for n in best.recurse().notes:
-
-
-    if not isinstance(n, note.Note):
-        continue
-
-
-    midi = n.pitch.midi
-
-
-    if midi < 48:
-        continue
-
-
-
-    new = note.Note()
-
-    new.pitch.midi = midi
-
-
-
-    ql = float(
-        n.duration.quarterLength
+    new_note = note.Note(
+        n.pitch
     )
 
 
-    if ql <= 0:
-        continue
+    new_note.quarterLength = 1
 
 
-
-    if ql > 4:
-        ql = 4
-
-
-
-    allowed = [
-
-        4,
-        2,
-        1,
-        0.5,
-        0.25,
-        0.125
-
-    ]
-
-
-    ql = min(
-        allowed,
-        key=lambda x:
-        abs(x-ql)
+    result.append(
+        new_note
     )
-
-
-
-    new.duration = duration.Duration(
-        ql
-    )
-
-
-    part.append(
-        new
-    )
-
-
-    count += 1
 
 
 
 print(
-    "保留音符:",
-    count
+    "保留旋律:",
+    len(result.notes)
 )
 
 
 
-# =========================
-# SCORE
-# =========================
+# ==========================
+# Build Score
+# ==========================
 
-score = stream.Score()
 
-score.append(
-    part
+out = stream.Score()
+
+
+out.append(
+    result
 )
 
 
 
-# =========================
-# MAKE MEASURE
-# =========================
+# ==========================
+# Write
+# ==========================
 
-print(
-    "建立小節..."
-)
-
-
-score = score.makeMeasures(
-    inPlace=False
-)
-
-
-
-# =========================
-# CLEAN MEASURES
-# =========================
-
-print(
-    "清理 MusicXML..."
-)
-
-
-for p in score.parts:
-
-    for m in p.getElementsByClass(
-        "Measure"
-    ):
-
-
-        # 移除 barline 資訊
-        m.leftBarline = None
-        m.rightBarline = None
-
-
-
-        # 移除空休止
-        for r in list(
-            m.recurse().getElementsByClass("Rest")
-        ):
-
-            m.remove(r)
-
-
-
-# =========================
-# FINAL CHECK
-# =========================
-
-print(
-    "Final notes:"
-)
-
-
-for n in score.recurse().notes:
-
-    print(
-        n.pitch,
-        n.pitch.midi
-    )
-
-
-
-# =========================
-# WRITE
-# =========================
 
 print(
     "輸出 MusicXML..."
 )
 
 
-score.write(
+out.write(
     "musicxml",
-    fp=OUTPUT
+    fp=output_file
 )
 
 
 print(
     "完成:",
-    OUTPUT
+    output_file
 )
 
 
