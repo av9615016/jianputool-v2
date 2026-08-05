@@ -1,30 +1,32 @@
 """
-MIDI TO MUSICXML CLEAN V21.1
-JianpuTool Melody Lock Engine
+MIDI TO MUSICXML CLEAN V22
+JianpuTool Melody Extract Engine
 
-MIDI -> Melody -> MusicXML
+MIDI
+ -> Track Analysis
+ -> Melody Extract
+ -> MusicXML
 """
+
 
 import sys
 
 from music21 import converter
 from music21 import stream
 from music21 import meter
-from music21 import note
 from music21 import tempo
+from music21 import note
+
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V21.1")
-print(" Melody Lock Engine")
+print(" MIDI TO MUSICXML CLEAN V22")
+print(" Melody Extract Engine")
 print("==============================")
+
 
 
 if len(sys.argv) < 3:
-
-    print(
-        "Usage:"
-    )
 
     print(
         "python midi_to_musicxml_clean.py input.mid output.musicxml"
@@ -44,8 +46,8 @@ output_file = sys.argv[2]
 # Load MIDI
 # ==========================
 
-print("讀取 MIDI...")
 
+print("讀取 MIDI...")
 
 score = converter.parse(
     midi_file
@@ -54,16 +56,14 @@ score = converter.parse(
 
 
 # ==========================
-# Select Melody Track
+# Analyze Tracks
 # ==========================
 
 
 print("分析 MIDI 軌...")
 
 
-best_part = None
-
-best_value = -1
+candidates = []
 
 
 
@@ -81,10 +81,7 @@ for index, part in enumerate(score.parts):
 
 
 
-    count = len(notes)
-
-
-    if count == 0:
+    if len(notes) == 0:
 
         continue
 
@@ -108,16 +105,38 @@ for index, part in enumerate(score.parts):
     )
 
 
+    unique_pitch = len(
+        set(pitches)
+    )
+
+
 
     # 旋律評分
 
-    value = (
+    value = 0
 
-        count
-        +
-        pitch_range * 2
 
+    # 音符數
+
+    value += min(
+        len(notes),
+        100
     )
+
+
+    # 小音域旋律加分
+
+    if pitch_range <= 24:
+
+        value += 30
+
+
+
+    # 音高種類少代表旋律
+
+    if unique_pitch <= 15:
+
+        value += 30
 
 
 
@@ -125,27 +144,39 @@ for index, part in enumerate(score.parts):
         "TRACK",
         index,
         "notes:",
-        count,
+        len(notes),
         "range:",
-        pitch_range
+        pitch_range,
+        "score:",
+        value
     )
 
 
 
-    if value > best_value:
+    candidates.append(
+        (
+            value,
+            part
+        )
+    )
 
-        best_value = value
-
-        best_part = part
 
 
-
-
-if best_part is None:
+if not candidates:
 
     raise Exception(
-        "找不到 MIDI 旋律"
+        "找不到旋律 Track"
     )
+
+
+
+# 最高分
+
+best_part = sorted(
+    candidates,
+    key=lambda x:x[0],
+    reverse=True
+)[0][1]
 
 
 
@@ -156,7 +187,7 @@ print(
 
 
 # ==========================
-# Extract Notes
+# Extract Melody
 # ==========================
 
 
@@ -166,7 +197,7 @@ melody = []
 for n in best_part.flat.notes:
 
 
-    if isinstance(n, note.Note):
+    if isinstance(n,note.Note):
 
         melody.append(n)
 
@@ -180,7 +211,7 @@ print(
 
 
 # ==========================
-# Remove exact duplicates
+# Remove Duplicate
 # ==========================
 
 
@@ -198,10 +229,12 @@ for n in melody:
 
     pitch = n.pitch.midi
 
+
     offset = round(
         n.offset,
         3
     )
+
 
 
     if (
@@ -221,6 +254,7 @@ for n in melody:
     clean.append(n)
 
 
+
     last_pitch = pitch
 
     last_offset = offset
@@ -228,7 +262,7 @@ for n in melody:
 
 
 print(
-    "去重後:",
+    "清理後:",
     len(clean)
 )
 
@@ -239,11 +273,11 @@ print(
 # ==========================
 
 
-part_out = stream.Part()
+out_part = stream.Part()
 
 
 
-part_out.append(
+out_part.append(
     meter.TimeSignature(
         "4/4"
     )
@@ -251,7 +285,7 @@ part_out.append(
 
 
 
-part_out.append(
+out_part.append(
     tempo.MetronomeMark(
         number=80
     )
@@ -267,28 +301,28 @@ for n in clean:
     )
 
 
-    # 保持簡譜節奏穩定
+    # 保留原節奏
 
-    new_note.quarterLength = (
-        1
+    new_note.duration = (
+        n.duration
     )
 
 
-    part_out.append(
+    out_part.append(
         new_note
     )
 
 
 
 print(
-    "保留旋律:",
-    len(part_out.notes)
+    "輸出音符:",
+    len(out_part.notes)
 )
 
 
 
 # ==========================
-# Create Score
+# Score
 # ==========================
 
 
@@ -296,20 +330,19 @@ out_score = stream.Score()
 
 
 out_score.append(
-    part_out
+    out_part
 )
 
 
 
 # ==========================
-# Export
+# Write
 # ==========================
 
 
 print(
     "輸出 MusicXML..."
 )
-
 
 
 out_score.write(
