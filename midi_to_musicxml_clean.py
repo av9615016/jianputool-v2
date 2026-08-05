@@ -1,17 +1,17 @@
 # ==========================================================
-# midi_to_musicxml_clean.py V30.3
+# midi_to_musicxml_clean.py V31
 #
 # JianpuTool
 #
-# MIDI -> MusicXML
+# Vocal Melody Tracker
 #
-# Melody Extractor Pro
-# Final Quantize Builder
+# MIDI -> MusicXML
 #
 # ==========================================================
 
 import sys
 import copy
+import math
 
 from music21 import converter
 from music21 import stream
@@ -20,6 +20,7 @@ from music21 import chord
 from music21 import meter
 from music21 import tempo
 from music21 import duration
+
 
 
 # ----------------------------------------------------------
@@ -47,7 +48,11 @@ def find_vocal_part(score):
 
         if any(k in name for k in VOCAL_KEYS):
 
-            print("找到 Vocal Track:", part.partName)
+            print(
+                "找到 Vocal:",
+                part.partName
+            )
+
             return part
 
     return None
@@ -55,132 +60,161 @@ def find_vocal_part(score):
 
 
 # ----------------------------------------------------------
-# Melody Extractor
+# 收集候選旋律音
 # ----------------------------------------------------------
 
-def extract_melody_pro(part):
+def collect_candidates(part):
 
-    print("啟動 Melody Extractor Pro")
-
-    raw = []
-
-    for element in part.flatten().notes:
-
-        if isinstance(element, note.Note):
-
-            raw.append(
-                copy.deepcopy(element)
-            )
+    notes = []
 
 
-        elif isinstance(element, chord.Chord):
-
-            highest = max(
-                element.notes,
-                key=lambda x:x.pitch.midi
-            )
-
-            n = copy.deepcopy(highest)
-
-            n.offset = element.offset
-
-            raw.append(n)
+    for e in part.flatten().notes:
 
 
-    print("原始音符:", len(raw))
+        if isinstance(e, note.Note):
+
+            n = copy.deepcopy(e)
+            notes.append(n)
 
 
-    raw = [
-        n for n in raw
-        if n.pitch.midi >= 55
+        elif isinstance(e, chord.Chord):
+
+            for n in e.notes:
+
+                nn = copy.deepcopy(n)
+
+                nn.offset = e.offset
+
+                notes.append(nn)
+
+
+
+    print(
+        "全部音符:",
+        len(notes)
+    )
+
+
+    # 人聲範圍
+
+    candidates = [
+
+        n for n in notes
+
+        if 55 <= n.pitch.midi <= 84
+
     ]
 
 
-    print("移除低音後:", len(raw))
+    print(
+        "人聲範圍候選:",
+        len(candidates)
+    )
 
 
-    timeline = {}
+    return candidates
 
 
-    for n in raw:
 
-        key = round(
+# ----------------------------------------------------------
+# Melody Tracking
+# ----------------------------------------------------------
+
+def melody_tracker(notes):
+
+
+    print(
+        "啟動 Vocal Melody Tracker"
+    )
+
+
+    # 同時間分組
+
+    groups = {}
+
+
+    for n in notes:
+
+        t = round(
             float(n.offset),
             2
         )
 
-        if (
-            key not in timeline
-            or
-            n.pitch.midi >
-            timeline[key].pitch.midi
-        ):
-            timeline[key] = n
 
-
-    melody = list(
-        timeline.values()
-    )
-
-
-    melody.sort(
-        key=lambda x:x.offset
-    )
-
-
-    print(
-        "時間去重後:",
-        len(melody)
-    )
-
-
-    return melody
+        groups.setdefault(
+            t,
+            []
+        ).append(n)
 
 
 
-# ----------------------------------------------------------
-# Quantize
-# ----------------------------------------------------------
-
-def quantize_length(value):
-
-    """
-    四分音符量化
-    """
-
-    choices = [
-        0.25,
-        0.5,
-        1.0,
-        2.0,
-        4.0
-    ]
-
-    return min(
-        choices,
-        key=lambda x:abs(x-value)
-    )
+    timeline = []
 
 
+    for t in sorted(groups.keys()):
 
-def quantize_notes(notes):
+
+        candidates = groups[t]
+
+
+        # 長音優先
+
+        best = max(
+            candidates,
+            key=lambda n:
+            (
+                float(n.duration.quarterLength),
+                n.pitch.midi
+            )
+        )
+
+
+        timeline.append(best)
+
+
+
+    # ----------------------------------
+    # 音程連續修正
+    # ----------------------------------
 
     result = []
 
-    for n in notes:
 
-        n2 = copy.deepcopy(n)
-
-        q = float(
-            n2.duration.quarterLength
-        )
+    last_pitch = None
 
 
-        n2.duration = duration.Duration(
-            quantize_length(q)
-        )
+    for n in timeline:
 
-        result.append(n2)
+
+        pitch = n.pitch.midi
+
+
+        if last_pitch is not None:
+
+
+            jump = abs(
+                pitch-last_pitch
+            )
+
+
+            # 太大跳躍通常是伴奏
+
+            if jump > 12:
+
+                continue
+
+
+
+        result.append(n)
+
+        last_pitch = pitch
+
+
+
+    print(
+        "追蹤後:",
+        len(result)
+    )
 
 
     return result
@@ -188,17 +222,53 @@ def quantize_notes(notes):
 
 
 # ----------------------------------------------------------
-# Measure Builder
+# Quantize
 # ----------------------------------------------------------
 
-def build_measure_score(notes):
+def quantize_note(n):
+
+    n2 = copy.deepcopy(n)
 
 
-    notes = quantize_notes(notes)
+    values = [
+
+        0.25,
+        0.5,
+        1,
+        2,
+        4
+
+    ]
+
+
+    q = float(
+        n2.duration.quarterLength
+    )
+
+
+    best = min(
+        values,
+        key=lambda x:abs(x-q)
+    )
+
+
+    n2.duration = duration.Duration(
+        best
+    )
+
+
+    return n2
+
+
+
+# ----------------------------------------------------------
+# 建立4/4
+# ----------------------------------------------------------
+
+def build_musicxml(notes):
 
 
     score = stream.Score()
-
 
     part = stream.Part()
 
@@ -209,24 +279,26 @@ def build_measure_score(notes):
 
 
     part.append(
-        tempo.MetronomeMark(
-            number=80
-        )
+        tempo.MetronomeMark(80)
     )
 
-
-    measure_no = 1
 
     measure = stream.Measure(
-        number=measure_no
+        number=1
     )
 
 
-    beat = 0.0
+    beat = 0
+
+
+    bar = 1
 
 
 
     for n in notes:
+
+
+        n = quantize_note(n)
 
 
         length = float(
@@ -234,61 +306,53 @@ def build_measure_score(notes):
         )
 
 
-        # 音符超過小節
-
-        if beat + length > 4.0:
+        if beat + length > 4:
 
 
-            rest_time = 4.0 - beat
+            rest = note.Rest()
+
+            rest.duration = duration.Duration(
+                4-beat
+            )
 
 
-            if rest_time > 0:
+            if 4-beat > 0:
 
-                r = note.Rest()
-
-                r.duration = duration.Duration(
-                    rest_time
-                )
-
-                measure.append(r)
+                measure.append(rest)
 
 
 
             part.append(measure)
 
 
-            measure_no += 1
+            bar += 1
 
 
             measure = stream.Measure(
-                number=measure_no
+                number=bar
             )
 
 
-            beat = 0.0
+            beat = 0
 
 
 
-        measure.append(
-            n
-        )
-
+        measure.append(n)
 
         beat += length
 
 
 
-    # 最後補滿
+    if beat < 4:
 
-    if beat < 4.0:
 
-        r = note.Rest()
+        rest = note.Rest()
 
-        r.duration = duration.Duration(
-            4.0 - beat
+        rest.duration = duration.Duration(
+            4-beat
         )
 
-        measure.append(r)
+        measure.append(rest)
 
 
 
@@ -309,25 +373,28 @@ def build_measure_score(notes):
 if __name__ == "__main__":
 
 
-    if len(sys.argv) < 3:
+    if len(sys.argv)<3:
 
         print(
             "python midi_to_musicxml_clean.py input.mid output.musicxml"
         )
 
-        sys.exit()
+        exit()
 
 
-    midi_file = sys.argv[1]
+
+    midi = sys.argv[1]
 
     output = sys.argv[2]
 
 
-    print("讀取 MIDI...")
+    print(
+        "讀取 MIDI..."
+    )
 
 
     score = converter.parse(
-        midi_file
+        midi
     )
 
 
@@ -337,58 +404,73 @@ if __name__ == "__main__":
     )
 
 
+
     vocal = find_vocal_part(score)
 
 
 
     if vocal:
 
+
         print(
             "模式: Vocal MIDI"
         )
 
+
         notes = [
+
             n for n in vocal.flatten().notes
+
             if isinstance(n,note.Note)
+
         ]
 
 
     else:
 
+
         print(
             "沒有 Vocal Track"
         )
 
+
         if len(score.parts)==1:
 
-            notes = extract_melody_pro(
-                score.parts[0]
-            )
+            part = score.parts[0]
+
 
         else:
 
-            best = max(
+            part = max(
                 score.parts,
-                key=lambda p:len(p.flatten().notes)
+                key=lambda p:
+                len(p.flatten().notes)
             )
 
-            notes = extract_melody_pro(
-                best
-            )
+
+
+        candidates = collect_candidates(
+            part
+        )
+
+
+        notes = melody_tracker(
+            candidates
+        )
 
 
 
     print(
-        "建立 Quantized 4/4 MusicXML..."
+        "建立 MusicXML..."
     )
 
 
-    final = build_measure_score(
+    result = build_musicxml(
         notes
     )
 
 
-    final.write(
+    result.write(
         "musicxml",
         fp=output
     )
