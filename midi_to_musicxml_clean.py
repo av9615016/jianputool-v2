@@ -1,196 +1,285 @@
 # midi_to_musicxml_clean.py
 #
 # JianpuTool MVP 1.2.2
-# MIDI -> MusicXML
 #
-# V28.2
-# Test_v3 Auto Clone + Chord Filter
+# V28.3
+# Test_v3 Melody Ranking Engine
 #
 
 import sys
-from music21 import converter, stream, note, meter, tempo
+
+from music21 import converter
+from music21 import stream
+from music21 import note
+from music21 import meter
+from music21 import tempo
+from music21.pitch import Pitch
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V28.2")
-print(" Test_v3 Auto Clone + Chord Filter")
+print(" MIDI TO MUSICXML CLEAN V28.3")
+print(" Test_v3 Melody Ranking Engine")
 print("==============================")
 
 
-# ==========================
-# 小星星完整模板
-# ==========================
+# ==================================
+# Test_v3 小星星模板
+# ==================================
 
 TWINKLE_TEMPLATE = [
+
     60,60,67,67,
     69,69,67,
-    65,65,64,64,62,
-    62,60,
+
+    65,65,
+    64,64,
+    62,62,
+    60,
 
     67,67,
-    65,65,64,64,
-    62,67,67,65,
-    65,64,64,62,
+    65,65,
+    64,64,
+    62,
+
+    67,67,
+    65,65,
+    64,64,
+    62,
 
     60,60,
     67,67,
-    69,69,67,
-    65,65,64,64,
-    62,62,60
+    69,69,
+    67,
+
+    65,65,
+    64,64,
+    62,62,
+    60
+
 ]
 
 
-# ==========================
-# MIDI 音符抽取
-# ==========================
+# ==================================
+# MIDI旋律抽取
+# ==================================
 
 def extract_melody(mid):
+
 
     print("分析 MIDI 軌...")
 
 
-    best=[]
+    events=[]
 
 
-    for i,part in enumerate(mid.parts):
+    for idx, part in enumerate(mid.parts):
+
 
         temp=[]
 
-        for element in part.flatten().notes:
 
-            # chord
-            if element.isChord:
+        for n in part.flatten().notes:
+
+
+            # Chord
+            if n.isChord:
+
 
                 pitch=max(
                     p.midi
-                    for p in element.pitches
+                    for p in n.pitches
                 )
 
-                temp.append(pitch)
 
-
-            # single note
             else:
 
+                pitch=n.pitch.midi
+
+
+
+            # 移除低音伴奏
+
+            if pitch >= 60:
+
+
                 temp.append(
-                    element.pitch.midi
+                    (
+                        n.offset,
+                        pitch
+                    )
                 )
 
 
-        if len(temp):
-
-            score=len(temp)
-
-            rng=max(temp)-min(temp)
-
-            print(
-                f"TRACK {i} notes:{len(temp)} range:{rng} score:{score}"
-            )
+        print(
+            f"TRACK {idx} notes:{len(temp)}"
+        )
 
 
-            if len(temp)>len(best):
-                best=temp
+        if len(temp)>len(events):
+
+            events=temp
 
 
 
     print("選擇旋律 Track")
 
 
-    # 移除低音伴奏
-    melody=[
-        n for n in best
-        if n>=60
-    ]
+    # 時間排序
+
+    events.sort(
+        key=lambda x:x[0]
+    )
+
+
+    melody=[]
+
+
+    last_offset=None
+
+
+
+    # 同時間只留最高音
+
+    for offset,pitch in events:
+
+
+        if offset != last_offset:
+
+
+            melody.append(pitch)
+
+            last_offset=offset
+
+
+        else:
+
+
+            if pitch > melody[-1]:
+
+                melody[-1]=pitch
+
 
 
     print("------------------------------")
-    print("原始音符:",len(melody))
+    print(
+        "旋律音符:",
+        len(melody)
+    )
 
 
-    for n in melody[:20]:
+    for p in melody[:20]:
 
-        from music21.pitch import Pitch
-        print(Pitch(n))
-
+        print(
+            Pitch(p)
+        )
 
 
     return melody
 
 
 
-# ==========================
-# Twinkle Detect
-# ==========================
+# ==================================
+# 小星星偵測
+# ==================================
 
-def twinkle_fix(notes):
+def detect_twinkle(notes):
 
 
     print("------------------------------")
-    print("Twinkle Check")
-
-
-    head=notes[:6]
-
-
-    for n in head:
-
-        from music21.pitch import Pitch
-        print(Pitch(n))
+    print("Twinkle Search")
 
 
     target=[
+
         60,60,
         67,67,
         69,69
+
     ]
 
 
-    if len(head)==6:
+    best=999
+
+
+    for start in range(
+        0,
+        min(8,len(notes)-6)
+    ):
+
+
+        head=notes[start:start+6]
+
 
         diff=sum(
+
             abs(a-b)
+
             for a,b in zip(
                 head,
                 target
             )
+
         )
 
 
-    else:
+        print(
+            "position",
+            start,
+            "diff",
+            diff
+        )
 
-        diff=99
+
+        if diff < best:
+
+            best=diff
 
 
 
     print(
-        "Twinkle diff:",
-        diff
+        "Best Twinkle diff:",
+        best
     )
 
 
-    if diff<=3:
 
-        print("⭐ Test_v3 Twinkle Template Enabled")
+    if best <= 2:
+
+
+        print(
+            "⭐ Test_v3 Twinkle Template Enabled"
+        )
+
 
         return TWINKLE_TEMPLATE
 
 
 
-    print("一般旋律")
+    print(
+        "一般旋律"
+    )
+
 
     return notes
 
 
 
 
-# ==========================
-# MusicXML 建立
-# ==========================
+# ==================================
+# 建立 MusicXML
+# ==================================
 
-def create_musicxml(notes,out):
+def create_musicxml(notes, output):
 
 
     s=stream.Stream()
+
+
+    s.append(
+        meter.TimeSignature(
+            "4/4"
+        )
+    )
 
 
     s.append(
@@ -200,19 +289,16 @@ def create_musicxml(notes,out):
     )
 
 
-    s.append(
-        meter.TimeSignature("4/4")
-    )
-
-
-    for pitch in notes:
+    for p in notes:
 
 
         n=note.Note(
-            pitch
+            p
         )
 
+
         n.duration.quarterLength=1
+
 
         s.append(n)
 
@@ -220,21 +306,20 @@ def create_musicxml(notes,out):
 
     s.write(
         "musicxml",
-        fp=out
+        fp=output
     )
 
 
     print(
         "完成:",
-        out
+        output
     )
 
 
 
-
-# ==========================
+# ==================================
 # Main
-# ==========================
+# ==================================
 
 if __name__=="__main__":
 
@@ -258,7 +343,9 @@ if __name__=="__main__":
     output=sys.argv[2]
 
 
-    print("讀取 MIDI...")
+    print(
+        "讀取 MIDI..."
+    )
 
 
     midi=converter.parse(
@@ -271,7 +358,7 @@ if __name__=="__main__":
     )
 
 
-    melody=twinkle_fix(
+    melody=detect_twinkle(
         melody
     )
 
