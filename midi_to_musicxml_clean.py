@@ -1,11 +1,14 @@
 # ==========================================================
-# midi_to_musicxml_clean.py V30
+# midi_to_musicxml_clean.py V30.1
 #
 # JianpuTool
 #
 # MIDI -> MusicXML
 #
-# Melody Extractor Pro
+# Melody Extractor Pro FIX
+#
+# Fix:
+#   offset=0 bug
 #
 # ==========================================================
 
@@ -20,8 +23,9 @@ from music21 import meter
 from music21 import tempo
 
 
+
 # ----------------------------------------------------------
-# Vocal Track 偵測
+# Vocal Track 搜尋
 # ----------------------------------------------------------
 
 VOCAL_KEYS = [
@@ -53,6 +57,7 @@ def find_vocal_part(score):
 
             return part
 
+
     return None
 
 
@@ -63,35 +68,43 @@ def find_vocal_part(score):
 
 def extract_melody_pro(part):
 
-    print("啟動 Melody Extractor Pro")
+    print(
+        "啟動 Melody Extractor Pro"
+    )
 
 
     raw = []
 
 
-    # 收集所有 note
+    # 使用 flatten 保留 offset
+    elements = part.flatten().notes
 
-    for element in part.recurse().notes:
+
+    for element in elements:
+
 
         if isinstance(element, note.Note):
 
-            raw.append(
-                copy.deepcopy(element)
-            )
+            n = copy.deepcopy(element)
+
+            raw.append(n)
+
 
 
         elif isinstance(element, chord.Chord):
-
-            # chord只取最高音
 
             highest = max(
                 element.notes,
                 key=lambda x:x.pitch.midi
             )
 
-            raw.append(
-                copy.deepcopy(highest)
-            )
+
+            n = copy.deepcopy(highest)
+
+            n.offset = element.offset
+
+            raw.append(n)
+
 
 
     print(
@@ -100,13 +113,17 @@ def extract_melody_pro(part):
     )
 
 
-    # ------------------------------
-    # 1. 排除低音
-    # ------------------------------
+
+    # -----------------------------
+    # 1. 移除低音
+    # -----------------------------
 
     raw = [
+
         n for n in raw
+
         if n.pitch.midi >= 55
+
     ]
 
 
@@ -116,26 +133,32 @@ def extract_melody_pro(part):
     )
 
 
-    # ------------------------------
+
+    # -----------------------------
     # 2. 同時間保留最高音
-    # ------------------------------
+    # -----------------------------
 
     timeline = {}
 
 
     for n in raw:
 
+
         key = round(
             float(n.offset),
-            3
+            2
         )
 
 
         if key not in timeline:
 
+
             timeline[key] = n
 
+
+
         else:
+
 
             if n.pitch.midi > timeline[key].pitch.midi:
 
@@ -153,20 +176,23 @@ def extract_melody_pro(part):
     )
 
 
+
     print(
         "時間去重後:",
         len(melody)
     )
 
 
-    # ------------------------------
-    # 3. 移除極短裝飾音
-    # ------------------------------
+
+    # -----------------------------
+    # 3. 移除過短裝飾音
+    # -----------------------------
 
     cleaned = []
 
 
     for n in melody:
+
 
         if n.duration.quarterLength >= 0.25:
 
@@ -180,9 +206,6 @@ def extract_melody_pro(part):
     )
 
 
-    # ------------------------------
-    # 建立新 Part
-    # ------------------------------
 
     result = stream.Part()
 
@@ -198,8 +221,9 @@ def extract_melody_pro(part):
 
 
 
+
 # ----------------------------------------------------------
-# 建立基本樂譜
+# 建立 MusicXML
 # ----------------------------------------------------------
 
 def build_score(part):
@@ -224,7 +248,8 @@ def build_score(part):
 
     for n in part.notes:
 
-        new_part.append(
+        new_part.insert(
+            n.offset,
             n
         )
 
@@ -238,6 +263,7 @@ def build_score(part):
 
 
 
+
 # ----------------------------------------------------------
 # MAIN
 # ----------------------------------------------------------
@@ -248,14 +274,11 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
 
         print(
-            "使用:"
-        )
-
-        print(
             "python midi_to_musicxml_clean.py input.mid output.musicxml"
         )
 
         sys.exit()
+
 
 
     midi_file = sys.argv[1]
@@ -263,7 +286,9 @@ if __name__ == "__main__":
     output = sys.argv[2]
 
 
-    print("讀取 MIDI...")
+    print(
+        "讀取 MIDI..."
+    )
 
 
     score = converter.parse(
@@ -278,18 +303,17 @@ if __name__ == "__main__":
 
 
 
-    # --------------------------
-    # Vocal 優先
-    # --------------------------
-
     vocal = find_vocal_part(score)
+
 
 
     if vocal:
 
+
         print(
             "模式: Vocal MIDI"
         )
+
 
         melody = copy.deepcopy(vocal)
 
@@ -297,14 +321,14 @@ if __name__ == "__main__":
 
     else:
 
+
         print(
             "沒有 Vocal Track"
         )
 
 
-        # 單軌
-
         if len(score.parts) == 1:
+
 
             melody = extract_melody_pro(
                 score.parts[0]
@@ -313,30 +337,16 @@ if __name__ == "__main__":
 
         else:
 
+
             print(
-                "多軌搜尋最佳旋律"
+                "多軌選擇最佳旋律"
             )
 
 
-            best = None
-
-            best_score = 0
-
-
-            for part in score.parts:
-
-                count = len(
-                    [
-                        n for n in part.recurse().notes
-                    ]
-                )
-
-
-                if count > best_score:
-
-                    best_score = count
-                    best = part
-
+            best = max(
+                score.parts,
+                key=lambda p: len(p.flatten().notes)
+            )
 
 
             melody = extract_melody_pro(
