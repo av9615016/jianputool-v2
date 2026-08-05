@@ -370,6 +370,8 @@ if uploaded:
             run_cmd(
                 [
                     "lilypond",
+                    "-o",
+                    os.path.join(job_dir, "final"),
                     "--pdf",
                     ly_file
                 ]
