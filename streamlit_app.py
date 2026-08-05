@@ -11,12 +11,12 @@ import traceback
 # ==========================
 
 st.set_page_config(
-    page_title="JianpuTool MVP 1.2.1",
+    page_title="JianpuTool MVP 1.2.2",
     page_icon="🎵"
 )
 
 
-st.title("🎵 JianpuTool MVP 1.2.1")
+st.title("🎵 JianpuTool MVP 1.2.2")
 
 
 st.write(
@@ -78,7 +78,9 @@ def run_cmd(cmd):
     )
 
 
-    st.text(result.stdout)
+    st.text(
+        result.stdout
+    )
 
 
     if result.returncode != 0:
@@ -99,43 +101,20 @@ def check_file(path):
 
 
 
-def fix_lilypond_tempo(path):
+def find_output(folder, extension):
 
-    with open(
-        path,
-        "r",
-        encoding="utf-8"
-    ) as f:
+    for root, dirs, files in os.walk(folder):
 
-        data = f.read()
+        for file in files:
 
+            if file.lower().endswith(extension):
 
-    replacements = {
+                return os.path.join(
+                    root,
+                    file
+                )
 
-        "#(ly:make-moment 84 4)": "84",
-
-        "#(ly:make-moment 80 4)": "80",
-
-        "#(ly:make-moment 120 4)": "120",
-
-    }
-
-
-    for old,new in replacements.items():
-
-        data = data.replace(
-            old,
-            new
-        )
-
-
-    with open(
-        path,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        f.write(data)
+    return None
 
 
 
@@ -236,7 +215,6 @@ if uploaded:
 
             else:
 
-
                 midi_file = input_file
 
 
@@ -275,7 +253,7 @@ if uploaded:
 
 
             # =====================
-            # Clean MusicXML
+            # Clean
             # =====================
 
 
@@ -302,7 +280,7 @@ if uploaded:
 
 
             # =====================
-            # Fix MusicXML
+            # Fix
             # =====================
 
 
@@ -368,7 +346,7 @@ if uploaded:
             if result.returncode != 0:
 
                 raise Exception(
-                    "jianpu-ly 失敗"
+                    "jianpu-ly 執行失敗"
                 )
 
 
@@ -384,16 +362,8 @@ if uploaded:
 
 
 
-            # 修正 LilyPond tempo
-
-            fix_lilypond_tempo(
-                ly_file
-            )
-
-
-
             # =====================
-            # LY → PDF
+            # LilyPond PDF
             # =====================
 
 
@@ -407,22 +377,35 @@ if uploaded:
 
 
 
-            pdf_file = os.path.join(
+            # 搜尋 PDF
+
+            pdf_file = find_output(
                 job_dir,
-                "final.pdf"
+                ".pdf"
             )
 
 
-            check_file(
-                pdf_file
-            )
+            if pdf_file is None:
 
+                raise FileNotFoundError(
+                    "LilyPond 沒有產生 PDF"
+                )
+
+
+            st.success(
+                f"找到 PDF: {pdf_file}"
+            )
 
 
             st.success(
                 "🎉 簡譜PDF完成!"
             )
 
+
+
+            # =====================
+            # Download
+            # =====================
 
 
             with open(
