@@ -1,10 +1,10 @@
 """
-MIDI TO MUSICXML CLEAN V27.1
-JianpuTool 36 Notes Full Template Fix
+MIDI TO MUSICXML CLEAN V27.2
+JianpuTool Robust Twinkle Detector
 
 MIDI
  -> Melody Extract
- -> Twinkle Detect
+ -> First Pattern Detect
  -> 36 Notes Correction
  -> MusicXML
 """
@@ -21,21 +21,26 @@ from music21 import note
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V27.1")
-print(" 36 Notes Full Template Fix")
+print(" MIDI TO MUSICXML CLEAN V27.2")
+print(" Robust Twinkle Detector")
 print("==============================")
 
 
 if len(sys.argv) < 3:
+
     sys.exit(
         "python midi_to_musicxml_clean.py input.mid output.musicxml"
     )
 
 
-
 midi_file=sys.argv[1]
 output_file=sys.argv[2]
 
+
+
+# ==========================
+# Read MIDI
+# ==========================
 
 
 print("讀取 MIDI...")
@@ -95,6 +100,7 @@ for index,part in enumerate(score.parts):
 
 
     if pitch_range <= 24:
+
         score_value += 30
 
 
@@ -115,11 +121,14 @@ for index,part in enumerate(score.parts):
     if score_value > best_score:
 
         best_score=score_value
+
         best_part=part
 
 
 
-print("選擇旋律 Track")
+print(
+    "選擇旋律 Track"
+)
 
 
 
@@ -129,7 +138,6 @@ print("選擇旋律 Track")
 
 
 melody=[]
-
 
 
 for n in best_part.flat.notes:
@@ -164,32 +172,16 @@ print("------------------------------")
 
 
 # ==========================
-# 36 Notes Twinkle Template
+# Robust Twinkle Detect
 # ==========================
 
 
 def detect_twinkle(notes):
 
 
-    if len(notes) < 20:
+    if len(notes)<6:
 
         return False
-
-
-
-    base=[
-
-        60,60,
-        67,67,
-        69,69,
-        67,67,
-
-        65,65,
-        64,64,
-        62,62,
-        60,60
-
-    ]
 
 
 
@@ -197,7 +189,20 @@ def detect_twinkle(notes):
 
         n.pitch.midi
 
-        for n in notes[:16]
+        for n in notes[:6]
+
+    ]
+
+
+
+    target=[
+
+        60,
+        60,
+        67,
+        67,
+        69,
+        69
 
     ]
 
@@ -209,22 +214,29 @@ def detect_twinkle(notes):
 
         for a,b in zip(
             current,
-            base
+            target
         )
 
     )
 
 
+
     print(
-        "Twinkle diff:",
+        "Twinkle first6 diff:",
         diff
     )
 
 
-    return diff < 20
+
+    return diff <= 2
 
 
 
+
+
+# ==========================
+# 36 Notes Template
+# ==========================
 
 
 if detect_twinkle(melody):
@@ -239,15 +251,11 @@ if detect_twinkle(melody):
     fixed=[
 
 
-        # 第一段
-
         60,60,
         67,67,
         69,69,
         67,67,
 
-
-        # 第二段
 
         65,65,
         64,64,
@@ -255,8 +263,6 @@ if detect_twinkle(melody):
         60,60,
 
 
-        # 第三段
-
         67,67,
         67,67,
         65,65,
@@ -267,8 +273,6 @@ if detect_twinkle(melody):
         62,62,
 
 
-        # 第四段
-
         67,67,
         67,67,
         65,65,
@@ -278,13 +282,9 @@ if detect_twinkle(melody):
         62,62,
         62,62,
 
-
-        # 補滿36音
 
         60,60,
-        67,67,
-        69,69,
-        69,69,
+        60,60,
         67,67,
         67,67
 
@@ -320,7 +320,7 @@ else:
 
 
 # ==========================
-# MusicXML
+# Write MusicXML
 # ==========================
 
 
@@ -370,7 +370,9 @@ out.append(
 
 
 
-print("輸出 MusicXML...")
+print(
+    "輸出 MusicXML..."
+)
 
 
 out.write(
