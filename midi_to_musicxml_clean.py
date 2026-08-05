@@ -1,14 +1,11 @@
 # ==========================================================
-# midi_to_musicxml_clean.py V29
+# midi_to_musicxml_clean.py V30
 #
 # JianpuTool
+#
 # MIDI -> MusicXML
 #
-# Features:
-# 1. Auto detect Vocal MIDI
-# 2. Auto detect Melody / Lead track
-# 3. Fallback single track melody extraction
-# 4. Clean melody output
+# Melody Extractor Pro
 #
 # ==========================================================
 
@@ -19,13 +16,12 @@ from music21 import converter
 from music21 import stream
 from music21 import note
 from music21 import chord
-from music21 import instrument
 from music21 import meter
 from music21 import tempo
 
 
 # ----------------------------------------------------------
-# 找 Vocal Track
+# Vocal Track 偵測
 # ----------------------------------------------------------
 
 VOCAL_KEYS = [
@@ -57,98 +53,169 @@ def find_vocal_part(score):
 
             return part
 
-
     return None
 
 
 
 # ----------------------------------------------------------
-# 分析音域
+# Melody Extractor Pro
 # ----------------------------------------------------------
 
-def get_notes(part):
+def extract_melody_pro(part):
 
-    return [
-        n for n in part.recurse().notes
-        if isinstance(n, note.Note)
-    ]
+    print("啟動 Melody Extractor Pro")
 
 
-
-# ----------------------------------------------------------
-# 單軌 MIDI 抽主旋律
-# ----------------------------------------------------------
-
-def extract_melody(part):
-
-    print("啟動 Melody Extractor")
+    raw = []
 
 
-    notes = []
+    # 收集所有 note
 
-    for n in part.recurse().notes:
+    for element in part.recurse().notes:
 
-        if isinstance(n, note.Note):
+        if isinstance(element, note.Note):
 
-            notes.append(n)
+            raw.append(
+                copy.deepcopy(element)
+            )
 
-        elif isinstance(n, chord.Chord):
 
-            # 保留最高音
+        elif isinstance(element, chord.Chord):
+
+            # chord只取最高音
+
             highest = max(
-                n.notes,
+                element.notes,
                 key=lambda x:x.pitch.midi
             )
 
-            notes.append(highest)
-
-
-    # 排除低音
-    filtered = [
-        n for n in notes
-        if n.pitch.midi >= 48
-    ]
+            raw.append(
+                copy.deepcopy(highest)
+            )
 
 
     print(
         "原始音符:",
-        len(notes)
+        len(raw)
     )
+
+
+    # ------------------------------
+    # 1. 排除低音
+    # ------------------------------
+
+    raw = [
+        n for n in raw
+        if n.pitch.midi >= 55
+    ]
+
 
     print(
-        "保留旋律:",
-        len(filtered)
+        "移除低音後:",
+        len(raw)
     )
 
 
-    new_part = stream.Part()
+    # ------------------------------
+    # 2. 同時間保留最高音
+    # ------------------------------
 
-    for n in filtered:
+    timeline = {}
 
-        new_part.append(
-            copy.deepcopy(n)
+
+    for n in raw:
+
+        key = round(
+            float(n.offset),
+            3
         )
 
 
-    return new_part
+        if key not in timeline:
+
+            timeline[key] = n
+
+        else:
+
+            if n.pitch.midi > timeline[key].pitch.midi:
+
+                timeline[key] = n
 
 
 
-# ----------------------------------------------------------
-# 建立4/4小節
-# ----------------------------------------------------------
+    melody = list(
+        timeline.values()
+    )
 
-def rebuild_measures(part):
+
+    melody.sort(
+        key=lambda x:x.offset
+    )
+
+
+    print(
+        "時間去重後:",
+        len(melody)
+    )
+
+
+    # ------------------------------
+    # 3. 移除極短裝飾音
+    # ------------------------------
+
+    cleaned = []
+
+
+    for n in melody:
+
+        if n.duration.quarterLength >= 0.25:
+
+            cleaned.append(n)
+
+
+
+    print(
+        "節奏過濾後:",
+        len(cleaned)
+    )
+
+
+    # ------------------------------
+    # 建立新 Part
+    # ------------------------------
 
     result = stream.Part()
 
 
-    result.append(
+    for n in cleaned:
+
+        result.append(
+            n
+        )
+
+
+    return result
+
+
+
+# ----------------------------------------------------------
+# 建立基本樂譜
+# ----------------------------------------------------------
+
+def build_score(part):
+
+    score = stream.Score()
+
+
+    new_part = stream.Part()
+
+
+    new_part.append(
         meter.TimeSignature("4/4")
     )
 
 
-    result.append(
+    new_part.append(
         tempo.MetronomeMark(
             number=80
         )
@@ -157,15 +224,22 @@ def rebuild_measures(part):
 
     for n in part.notes:
 
-        result.append(n)
+        new_part.append(
+            n
+        )
 
 
-    return result
+    score.append(
+        new_part
+    )
+
+
+    return score
 
 
 
 # ----------------------------------------------------------
-# main
+# MAIN
 # ----------------------------------------------------------
 
 if __name__ == "__main__":
@@ -204,9 +278,9 @@ if __name__ == "__main__":
 
 
 
-    # -------------------------
-    # Step 1 Vocal
-    # -------------------------
+    # --------------------------
+    # Vocal 優先
+    # --------------------------
 
     vocal = find_vocal_part(score)
 
@@ -228,13 +302,11 @@ if __name__ == "__main__":
         )
 
 
+        # 單軌
+
         if len(score.parts) == 1:
 
-            print(
-                "模式: 單軌 MIDI"
-            )
-
-            melody = extract_melody(
+            melody = extract_melody_pro(
                 score.parts[0]
             )
 
@@ -242,49 +314,48 @@ if __name__ == "__main__":
         else:
 
             print(
-                "模式: 多軌搜尋最高旋律"
+                "多軌搜尋最佳旋律"
             )
 
 
             best = None
-            best_count = 0
+
+            best_score = 0
 
 
             for part in score.parts:
 
                 count = len(
-                    get_notes(part)
+                    [
+                        n for n in part.recurse().notes
+                    ]
                 )
 
 
-                if count > best_count:
+                if count > best_score:
 
-                    best_count = count
+                    best_score = count
                     best = part
 
 
-            melody = extract_melody(best)
+
+            melody = extract_melody_pro(
+                best
+            )
 
 
-
-    # -------------------------
-    # 建立 MusicXML
-    # -------------------------
 
     print(
         "建立 MusicXML..."
     )
 
 
-    final_score = stream.Score()
-
-
-    final_score.append(
-        rebuild_measures(melody)
+    final = build_score(
+        melody
     )
 
 
-    final_score.write(
+    final.write(
         "musicxml",
         fp=output
     )
