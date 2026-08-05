@@ -11,12 +11,12 @@ import traceback
 # ==========================
 
 st.set_page_config(
-    page_title="JianpuTool MVP 1.2",
+    page_title="JianpuTool MVP 1.2.1",
     page_icon="🎵"
 )
 
 
-st.title("🎵 JianpuTool MVP 1.2")
+st.title("🎵 JianpuTool MVP 1.2.1")
 
 
 st.write(
@@ -78,9 +78,7 @@ def run_cmd(cmd):
     )
 
 
-    st.text(
-        result.stdout
-    )
+    st.text(result.stdout)
 
 
     if result.returncode != 0:
@@ -101,27 +99,10 @@ def check_file(path):
 
 
 
-def find_file(folder, ext):
-
-    for root, dirs, files in os.walk(folder):
-
-        for f in files:
-
-            if f.lower().endswith(ext):
-
-                return os.path.join(
-                    root,
-                    f
-                )
-
-    return None
-
-
-
-def fix_lilypond_tempo(ly_file):
+def fix_lilypond_tempo(path):
 
     with open(
-        ly_file,
+        path,
         "r",
         encoding="utf-8"
     ) as f:
@@ -129,26 +110,27 @@ def fix_lilypond_tempo(ly_file):
         data = f.read()
 
 
-    data = data.replace(
-        "#(ly:make-moment 84 4)",
-        "84"
-    )
+    replacements = {
+
+        "#(ly:make-moment 84 4)": "84",
+
+        "#(ly:make-moment 80 4)": "80",
+
+        "#(ly:make-moment 120 4)": "120",
+
+    }
 
 
-    data = data.replace(
-        "#(ly:make-moment 80 4)",
-        "80"
-    )
+    for old,new in replacements.items():
 
-
-    data = data.replace(
-        "#(ly:make-moment 120 4)",
-        "120"
-    )
+        data = data.replace(
+            old,
+            new
+        )
 
 
     with open(
-        ly_file,
+        path,
         "w",
         encoding="utf-8"
     ) as f:
@@ -224,7 +206,7 @@ if uploaded:
 
 
             # =====================
-            # Audio -> MIDI
+            # Audio → MIDI
             # =====================
 
 
@@ -254,6 +236,7 @@ if uploaded:
 
             else:
 
+
                 midi_file = input_file
 
 
@@ -263,14 +246,9 @@ if uploaded:
             )
 
 
-            st.success(
-                "MIDI 完成"
-            )
-
-
 
             # =====================
-            # MIDI -> MusicXML
+            # MIDI → MusicXML
             # =====================
 
 
@@ -297,7 +275,7 @@ if uploaded:
 
 
             # =====================
-            # Clean
+            # Clean MusicXML
             # =====================
 
 
@@ -324,7 +302,7 @@ if uploaded:
 
 
             # =====================
-            # Fix
+            # Fix MusicXML
             # =====================
 
 
@@ -350,48 +328,63 @@ if uploaded:
 
 
 
-            st.success(
-                "MusicXML 完成"
-            )
-
-
-
             # =====================
-            # jianpu-ly
+            # MusicXML → LY
             # =====================
 
 
-            run_cmd(
-                [
-                    sys.executable,
-                    "-m",
-                    "jianpu_ly",
-                    final_xml
-                ]
-            )
-
-
-
-            ly_file = find_file(
+            ly_file = os.path.join(
                 job_dir,
-                ".ly"
+                "final.ly"
             )
 
 
-            if ly_file is None:
+            st.info(
+                "產生 LilyPond 檔..."
+            )
 
-                raise FileNotFoundError(
-                    "找不到 jianpu-ly 產生的 .ly"
+
+            with open(
+                ly_file,
+                "w",
+                encoding="utf-8"
+            ) as f:
+
+
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "jianpu_ly",
+                        final_xml
+                    ],
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    text=True
                 )
 
 
+
+            if result.returncode != 0:
+
+                raise Exception(
+                    "jianpu-ly 失敗"
+                )
+
+
+
+            check_file(
+                ly_file
+            )
+
+
             st.success(
-                f"找到LY: {ly_file}"
+                "LY產生完成"
             )
 
 
 
-            # 修正 tempo
+            # 修正 LilyPond tempo
 
             fix_lilypond_tempo(
                 ly_file
@@ -400,7 +393,7 @@ if uploaded:
 
 
             # =====================
-            # LilyPond PDF
+            # LY → PDF
             # =====================
 
 
@@ -414,18 +407,15 @@ if uploaded:
 
 
 
-            pdf_file = find_file(
+            pdf_file = os.path.join(
                 job_dir,
-                ".pdf"
+                "final.pdf"
             )
 
 
-
-            if pdf_file is None:
-
-                raise FileNotFoundError(
-                    "LilyPond 沒有產生PDF"
-                )
+            check_file(
+                pdf_file
+            )
 
 
 
