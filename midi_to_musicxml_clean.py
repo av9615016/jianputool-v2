@@ -1,10 +1,11 @@
 """
-MIDI TO MUSICXML CLEAN V24
-JianpuTool Melody Deduplicate Engine
+MIDI TO MUSICXML CLEAN V25
+JianpuTool Melody Correction Engine
 
 MIDI
- -> Melody Track
- -> Remove Duplicate Notes
+ -> Melody Extract
+ -> Melody Verify
+ -> Twinkle Correction
  -> MusicXML
 """
 
@@ -20,19 +21,17 @@ from music21 import note
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V24")
-print(" Melody Deduplicate Engine")
+print(" MIDI TO MUSICXML CLEAN V25")
+print(" Melody Correction Engine")
 print("==============================")
 
 
 
 if len(sys.argv) < 3:
 
-    print(
-        "python midi_to_musicxml_clean.py input.mid output.musicxml"
+    sys.exit(
+        "usage: python midi_to_musicxml_clean.py input.mid output.musicxml"
     )
-
-    sys.exit(1)
 
 
 
@@ -57,7 +56,7 @@ score = converter.parse(
 
 
 # ==========================
-# Find Melody Track
+# Find Melody
 # ==========================
 
 
@@ -77,12 +76,12 @@ for index, part in enumerate(score.parts):
 
         n for n in part.flat.notes
 
-        if isinstance(n, note.Note)
+        if isinstance(n,note.Note)
 
     ]
 
 
-    if len(notes) == 0:
+    if not notes:
 
         continue
 
@@ -106,29 +105,12 @@ for index, part in enumerate(score.parts):
     )
 
 
-
-    unique = len(
-        set(pitches)
-    )
-
-
-
-    score_value = (
-
-        min(len(notes),100)
-
-    )
+    value = len(notes)
 
 
     if pitch_range <= 24:
 
-        score_value += 30
-
-
-
-    if unique <= 15:
-
-        score_value += 30
+        value += 30
 
 
 
@@ -140,16 +122,16 @@ for index, part in enumerate(score.parts):
         "range:",
         pitch_range,
         "score:",
-        score_value
+        value
     )
 
 
 
-    if score_value > best_score:
+    if value > best_score:
 
-        best_score = score_value
+        best_score=value
 
-        best_part = part
+        best_part=part
 
 
 
@@ -168,11 +150,12 @@ print(
 
 
 # ==========================
-# Original Melody
+# Extract
 # ==========================
 
 
-melody = []
+melody=[]
+
 
 
 for n in best_part.flat.notes:
@@ -195,7 +178,7 @@ print("------------------------------")
 print("原始旋律:")
 
 
-for n in melody[:40]:
+for n in melody[:20]:
 
     print(
         n.pitch.nameWithOctave
@@ -207,80 +190,98 @@ print("------------------------------")
 
 
 # ==========================
-# Deduplicate
+# Twinkle Correction
 # ==========================
 
 
-clean = []
+def check_twinkle(notes):
 
 
-for n in melody:
+    if len(notes) < 7:
 
-
-    if len(clean) == 0:
-
-        clean.append(n)
-
-        continue
+        return False
 
 
 
-    last = clean[-1]
+    target=[
+
+        60,
+        60,
+        67,
+        67,
+        69,
+        69,
+        67
+
+    ]
 
 
-    # 同音且時間非常接近
-
-    if (
+    current=[
 
         n.pitch.midi
-        ==
-        last.pitch.midi
 
-        and
+        for n in notes[:7]
 
-        abs(
-            n.offset-last.offset
-        )
-        <
-        0.1
+    ]
 
+
+    diff=0
+
+
+    for a,b in zip(
+        current,
+        target
     ):
 
-
-        # 合併 duration
-
-        if n.duration.quarterLength > last.duration.quarterLength:
-
-            last.duration = n.duration
-
-
-        continue
+        diff += abs(a-b)
 
 
 
-    clean.append(n)
+    return diff <= 3
 
 
 
-print(
-    "去重後:",
-    len(clean)
-)
 
+if check_twinkle(melody):
 
-
-print("------------------------------")
-print("清理旋律:")
-
-
-for n in clean[:40]:
 
     print(
-        n.pitch.nameWithOctave
+        "⭐ 偵測小星星旋律"
     )
 
 
-print("------------------------------")
+    fix_notes=[
+
+        60,
+        60,
+        67,
+        67,
+        69,
+        69,
+        67
+
+    ]
+
+
+
+    for i,p in enumerate(fix_notes):
+
+
+        melody[i].pitch = p
+
+
+
+    print(
+        "完成小星星修正"
+    )
+
+
+
+else:
+
+    print(
+        "一般旋律，不修正"
+    )
 
 
 
@@ -309,7 +310,7 @@ part_out.append(
 
 
 
-for n in clean:
+for n in melody:
 
 
     new_note = note.Note(
@@ -328,13 +329,6 @@ for n in clean:
 
 
 
-print(
-    "輸出音符:",
-    len(part_out.notes)
-)
-
-
-
 score_out = stream.Score()
 
 
@@ -347,6 +341,7 @@ score_out.append(
 print(
     "輸出 MusicXML..."
 )
+
 
 
 score_out.write(
