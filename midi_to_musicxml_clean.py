@@ -1,7 +1,11 @@
 # ==========================================================
-# midi_to_musicxml_clean.py V32.1
+# midi_to_musicxml_clean.py V32.2
 #
-# Dynamic Programming Melody Path FIX
+# JianpuTool
+#
+# MIDI -> MusicXML
+#
+# Vocal Track + Melody Tracking
 #
 # ==========================================================
 
@@ -17,33 +21,67 @@ from music21 import tempo
 from music21 import duration
 
 
+# ----------------------------------------------------------
+# 安全 duration
+# ----------------------------------------------------------
 
-VOCAL_KEYS = [
-    "vocal",
-    "voice",
-    "melody",
-    "lead",
-    "singer",
-    "sing"
+VALID_LENGTH = [
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0
 ]
+
+
+def quantize_length(x):
+
+    return min(
+        VALID_LENGTH,
+        key=lambda y:abs(y-x)
+    )
+
+
+
+def safe_rest(x):
+
+    x = quantize_length(x)
+
+    r = note.Rest()
+
+    r.duration = duration.Duration(
+        x
+    )
+
+    return r
 
 
 
 # ----------------------------------------------------------
-# Vocal
+# Vocal Track
 # ----------------------------------------------------------
 
 def find_vocal(score):
 
+    keys = [
+        "vocal",
+        "voice",
+        "melody",
+        "lead",
+        "sing"
+    ]
+
     for part in score.parts:
 
-        name = ""
+        name=""
 
         if part.partName:
-            name = str(part.partName).lower()
+            name=str(
+                part.partName
+            ).lower()
 
 
-        if any(k in name for k in VOCAL_KEYS):
+        if any(k in name for k in keys):
 
             print(
                 "找到 Vocal:",
@@ -52,288 +90,114 @@ def find_vocal(score):
 
             return part
 
+
     return None
 
 
 
 # ----------------------------------------------------------
-# Candidates
+# 收集候選音
 # ----------------------------------------------------------
 
-def collect_candidates(part):
+def collect_notes(part):
 
-    groups = {}
+    result=[]
 
 
     for e in part.flatten().notes:
 
 
-        elements=[]
-
-
         if isinstance(e,note.Note):
 
-            elements=[e]
+            n=copy.deepcopy(e)
+
+            result.append(n)
 
 
         elif isinstance(e,chord.Chord):
 
-            elements=e.notes
+            # 和弦取最高音
+
+            n=max(
+                e.notes,
+                key=lambda x:x.pitch.midi
+            )
+
+            n=copy.deepcopy(n)
+
+            n.offset=e.offset
+
+            result.append(n)
 
 
 
-        for n in elements:
-
-
-            nn=copy.deepcopy(n)
-
-            nn.offset=e.offset
-
-
-            pitch=nn.pitch.midi
-
-
-            # 人聲範圍
-
-            if 55 <= pitch <= 84:
-
-
-                # 太短降低權重
-                if float(nn.duration.quarterLength) >= 0.125:
-
-
-                    t=round(
-                        float(e.offset),
-                        2
-                    )
-
-
-                    groups.setdefault(
-                        t,
-                        []
-                    ).append(nn)
+    return result
 
 
 
-    timeline=[]
+# ----------------------------------------------------------
+# Melody Filter
+# ----------------------------------------------------------
+
+def melody_filter(notes):
 
 
-    for t in sorted(groups):
+    print(
+        "原始:",
+        len(notes)
+    )
 
-        timeline.append(
-            groups[t]
+
+    # 人聲範圍
+
+    notes=[
+        n for n in notes
+        if 55 <= n.pitch.midi <= 84
+    ]
+
+
+    print(
+        "音域篩選:",
+        len(notes)
+    )
+
+
+    # 同時間最高音
+
+    table={}
+
+
+    for n in notes:
+
+        t=round(
+            float(n.offset),
+            2
         )
 
 
-    print(
-        "候選時間:",
-        len(timeline)
+        if (
+            t not in table
+            or
+            n.pitch.midi >
+            table[t].pitch.midi
+        ):
+
+            table[t]=n
+
+
+
+    result=list(
+        table.values()
     )
 
 
-    return timeline
-
-
-
-# ----------------------------------------------------------
-# Scoring
-# ----------------------------------------------------------
-
-def note_score(n):
-
-    pitch=n.pitch.midi
-
-
-    # 人聲中心附近較高
-
-    score=10-abs(
-        pitch-72
-    )*0.2
-
-
-    length=float(
-        n.duration.quarterLength
+    result.sort(
+        key=lambda x:x.offset
     )
-
-
-    score += min(
-        length,
-        2
-    )
-
-
-    return score
-
-
-
-def jump_score(a,b):
-
-    jump=abs(
-        a.pitch.midi-
-        b.pitch.midi
-    )
-
-
-    if jump<=5:
-        return 5
-
-    if jump<=12:
-        return 1
-
-    return -8
-
-
-
-# ----------------------------------------------------------
-# DP with Skip
-# ----------------------------------------------------------
-
-def dynamic_path(groups):
 
 
     print(
-        "Dynamic Programming Melody Path"
-    )
-
-
-    if not groups:
-        return []
-
-
-
-    dp=[]
-
-    parent=[]
-
-
-
-    # 第一層
-
-    dp.append(
-        [
-            note_score(n)
-            for n in groups[0]
-        ]
-    )
-
-
-    parent.append(
-        [
-            -1
-            for n in groups[0]
-        ]
-    )
-
-
-
-    for i in range(1,len(groups)):
-
-
-        current=[]
-
-        current_parent=[]
-
-
-        for j,n in enumerate(groups[i]):
-
-
-            best=-99999
-
-            best_k=-1
-
-
-
-            for k,prev in enumerate(groups[i-1]):
-
-
-                s=(
-
-                    dp[i-1][k]
-
-                    +
-
-                    jump_score(
-                        prev,
-                        n
-                    )
-
-                    +
-
-                    note_score(n)
-
-                )
-
-
-                if s>best:
-
-                    best=s
-                    best_k=k
-
-
-
-            # skip penalty
-
-            if best < -5:
-
-                continue
-
-
-
-            current.append(best)
-
-            current_parent.append(best_k)
-
-
-
-        if current:
-
-            dp.append(current)
-
-            parent.append(
-                current_parent
-            )
-
-
-
-    # 回溯
-
-    if not dp:
-        return []
-
-
-    idx=max(
-        range(len(dp[-1])),
-        key=lambda x:dp[-1][x]
-    )
-
-
-    result=[]
-
-
-    for i in range(
-        len(dp)-1,
-        -1,
-        -1
-    ):
-
-        if idx < len(groups[i]):
-
-            result.append(
-                groups[i][idx]
-            )
-
-
-        if i>0 and idx < len(parent[i]):
-
-            idx=parent[i][idx]
-
-
-
-    result.reverse()
-
-
-    print(
-        "最佳旋律:",
+        "旋律:",
         len(result)
     )
 
@@ -343,36 +207,13 @@ def dynamic_path(groups):
 
 
 # ----------------------------------------------------------
-# Safe Rest
+# 建立 4/4
 # ----------------------------------------------------------
 
-def make_rest(length):
-
-    if length <=0:
-        return None
-
-
-    r=note.Rest()
-
-
-    r.duration=duration.Duration(
-        length
-    )
-
-
-    return r
-
-
-
-# ----------------------------------------------------------
-# MusicXML
-# ----------------------------------------------------------
-
-def build_xml(notes):
+def build_score(notes):
 
 
     score=stream.Score()
-
 
     part=stream.Part()
 
@@ -383,7 +224,9 @@ def build_xml(notes):
 
 
     part.append(
-        tempo.MetronomeMark(80)
+        tempo.MetronomeMark(
+            number=80
+        )
     )
 
 
@@ -399,29 +242,31 @@ def build_xml(notes):
     for n in notes:
 
 
-        n2=copy.deepcopy(n)
-
-
-        q=min(
-            float(n2.duration.quarterLength),
-            2
+        q=quantize_length(
+            float(
+                n.duration.quarterLength
+            )
         )
 
 
-        n2.duration=duration.Duration(q)
+        n2=copy.deepcopy(n)
+
+        n2.duration=duration.Duration(
+            q
+        )
 
 
-
-        if beat+q>4:
-
-
-            r=make_rest(
-                4-beat
-            )
+        if beat+q > 4:
 
 
-            if r:
-                measure.append(r)
+            rest_time=4-beat
+
+
+            if rest_time>0:
+
+                measure.append(
+                    safe_rest(rest_time)
+                )
 
 
             part.append(
@@ -430,7 +275,8 @@ def build_xml(notes):
 
 
             measure=stream.Measure(
-                number=measure.number+1
+                number=
+                measure.number+1
             )
 
 
@@ -447,14 +293,13 @@ def build_xml(notes):
 
 
 
-    r=make_rest(
-        4-beat
-    )
+    if beat < 4:
 
-
-    if r:
-        measure.append(r)
-
+        measure.append(
+            safe_rest(
+                4-beat
+            )
+        )
 
 
     part.append(
@@ -480,11 +325,11 @@ if __name__=="__main__":
 
     midi=sys.argv[1]
 
-    out=sys.argv[2]
+    output=sys.argv[2]
 
 
     print(
-        "讀取 MIDI"
+        "讀取 MIDI..."
     )
 
 
@@ -493,53 +338,66 @@ if __name__=="__main__":
     )
 
 
+    print(
+        "Tracks:",
+        len(score.parts)
+    )
+
+
+
     vocal=find_vocal(score)
 
 
 
     if vocal:
 
+        print(
+            "模式: Vocal MIDI"
+        )
 
-        notes=[
-            n for n in vocal.flatten().notes
-            if isinstance(n,note.Note)
-        ]
+        notes=collect_notes(
+            vocal
+        )
 
 
     else:
 
-
         print(
-            "單軌 Melody Tracking"
+            "模式: Melody Extraction"
         )
 
 
         part=score.parts[0]
 
 
-        groups=collect_candidates(
+        notes=collect_notes(
             part
         )
 
 
-        notes=dynamic_path(
-            groups
+        notes=melody_filter(
+            notes
         )
 
 
 
-    result=build_xml(
+    print(
+        "建立 MusicXML..."
+    )
+
+
+    result=build_score(
         notes
     )
 
 
     result.write(
         "musicxml",
-        fp=out
+        fp=output
     )
 
 
     print(
         "完成:",
-        out
+        output
     )
