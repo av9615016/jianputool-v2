@@ -73,6 +73,7 @@ if upload:
         "demucs",
         "-n",
         "htdemucs",
+        "--float32",
         input_audio
     ])
 
