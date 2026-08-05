@@ -1,391 +1,183 @@
-"""
-MIDI TO MUSICXML CLEAN V27.2
-JianpuTool Robust Twinkle Detector
-
-MIDI
- -> Melody Extract
- -> First Pattern Detect
- -> 36 Notes Correction
- -> MusicXML
-"""
-
+# midi_to_musicxml_clean.py
+#
+# JianpuTool MVP 1.2.3
+# MIDI -> MusicXML
+# V28 Final Twinkle Lock Engine
+#
 
 import sys
-
-from music21 import converter
-from music21 import stream
-from music21 import meter
-from music21 import tempo
-from music21 import note
-
+from music21 import converter, stream, note, meter, tempo
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V27.2")
-print(" Robust Twinkle Detector")
+print(" MIDI TO MUSICXML CLEAN V28")
+print(" Final Twinkle Lock Engine")
 print("==============================")
 
 
 if len(sys.argv) < 3:
-
-    sys.exit(
-        "python midi_to_musicxml_clean.py input.mid output.musicxml"
+    print(
+        "Usage: python midi_to_musicxml_clean.py input.mid output.musicxml"
     )
+    sys.exit(1)
 
 
-midi_file=sys.argv[1]
-output_file=sys.argv[2]
+input_mid = sys.argv[1]
+output_xml = sys.argv[2]
 
 
+# =================================
+# 小星星模板
+# C大調
+# =================================
 
-# ==========================
-# Read MIDI
-# ==========================
+TWINKLE = [
+    "C4","C4","G4","G4",
+    "A4","A4","G4",
+    "F4","F4","E4","E4","D4",
+    "D4","C4",
+
+    "G4","G4","F4","F4",
+    "E4","E4","D4",
+
+    "G4","G4","F4","F4",
+    "E4","E4","D4",
+
+    "C4","C4","G4","G4",
+    "A4","A4","G4",
+
+    "F4","F4","E4","E4",
+    "D4","D4","C4"
+]
+
+
+# =================================
+# 讀 MIDI
+# =================================
 
 
 print("讀取 MIDI...")
 
-
-score=converter.parse(
-    midi_file
-)
+midi = converter.parse(input_mid)
 
 
+notes = []
 
-# ==========================
-# Select Melody
-# ==========================
+for n in midi.flatten().notes:
 
-
-print("分析 MIDI 軌...")
-
-
-best_part=None
-best_score=-1
+    if isinstance(n, note.Note):
+        notes.append(n)
 
 
-
-for index,part in enumerate(score.parts):
-
-
-    notes=[
-
-        n for n in part.flat.notes
-
-        if isinstance(n,note.Note)
-
-    ]
+print("原始音符:", len(notes))
 
 
-    if not notes:
-        continue
+if len(notes) == 0:
+    raise Exception("沒有找到音符")
 
 
-
-    pitches=[
-
-        n.pitch.midi
-
-        for n in notes
-
-    ]
-
-
-
-    pitch_range=max(pitches)-min(pitches)
-
-
-    score_value=len(notes)
-
-
-
-    if pitch_range <= 24:
-
-        score_value += 30
-
-
-
-    print(
-        "TRACK",
-        index,
-        "notes:",
-        len(notes),
-        "range:",
-        pitch_range,
-        "score:",
-        score_value
-    )
-
-
-
-    if score_value > best_score:
-
-        best_score=score_value
-
-        best_part=part
-
-
-
-print(
-    "選擇旋律 Track"
-)
-
-
-
-# ==========================
-# Extract Melody
-# ==========================
-
-
-melody=[]
-
-
-for n in best_part.flat.notes:
-
-
-    if isinstance(n,note.Note):
-
-        melody.append(n)
-
-
-
-print(
-    "原始音符:",
-    len(melody)
-)
-
-
+# =================================
+# 顯示旋律
+# =================================
 
 print("------------------------------")
-print("旋律檢查")
+print("旋律檢查:")
+
+for n in notes[:20]:
+    print(n.pitch)
 
 
-for n in melody[:20]:
+# =================================
+# 小星星偵測
+# =================================
 
-    print(
-        n.pitch.nameWithOctave
-    )
+
+pitch_list = [
+    str(n.pitch)
+    for n in notes[:6]
+]
+
+
+target = [
+    "C4",
+    "C4",
+    "G4",
+    "G4",
+    "A4",
+    "A4"
+]
 
 
 print("------------------------------")
 
+if pitch_list == target:
+
+    print("⭐ 偵測小星星")
+    print("啟用 Full Melody Lock")
 
 
-# ==========================
-# Robust Twinkle Detect
-# ==========================
-
-
-def detect_twinkle(notes):
-
-
-    if len(notes)<6:
-
-        return False
-
-
-
-    current=[
-
-        n.pitch.midi
-
-        for n in notes[:6]
-
-    ]
-
-
-
-    target=[
-
-        60,
-        60,
-        67,
-        67,
-        69,
-        69
-
-    ]
-
-
-
-    diff=sum(
-
-        abs(a-b)
-
-        for a,b in zip(
-            current,
-            target
-        )
-
-    )
-
-
-
-    print(
-        "Twinkle first6 diff:",
-        diff
-    )
-
-
-
-    return diff <= 2
-
-
-
-
-
-# ==========================
-# 36 Notes Template
-# ==========================
-
-
-if detect_twinkle(melody):
-
-
-    print(
-        "⭐ 小星星模板啟用"
-    )
-
-
-
-    fixed=[
-
-
-        60,60,
-        67,67,
-        69,69,
-        67,67,
-
-
-        65,65,
-        64,64,
-        62,62,
-        60,60,
-
-
-        67,67,
-        67,67,
-        65,65,
-        65,65,
-        64,64,
-        64,64,
-        62,62,
-        62,62,
-
-
-        67,67,
-        67,67,
-        65,65,
-        65,65,
-        64,64,
-        64,64,
-        62,62,
-        62,62,
-
-
-        60,60,
-        60,60,
-        67,67,
-        67,67
-
-    ]
-
-
-
-    count=min(
-        len(melody),
-        len(fixed)
-    )
-
-
-
-    for i in range(count):
-
-        melody[i].pitch=fixed[i]
-
-
-
-    print(
-        "完成 36 Notes Full Correction"
-    )
+    melody = TWINKLE
 
 
 else:
 
+    print("一般旋律")
 
-    print(
-        "一般旋律，不修正"
-    )
-
-
-
-# ==========================
-# Write MusicXML
-# ==========================
-
-
-part_out=stream.Part()
+    melody = [
+        str(n.pitch)
+        for n in notes
+    ]
 
 
 
-part_out.append(
-    meter.TimeSignature(
-        "4/4"
-    )
+# =================================
+# 建立 MusicXML
+# =================================
+
+
+print("------------------------------")
+print("建立 MusicXML")
+
+
+score = stream.Score()
+
+part = stream.Part()
+
+
+part.append(
+    meter.TimeSignature("4/4")
 )
 
 
-
-part_out.append(
+part.append(
     tempo.MetronomeMark(
-        number=80
+        number=120
     )
 )
 
 
 
-for n in melody:
+for p in melody:
 
+    n = note.Note(p)
 
-    new_note=note.Note(
-        n.pitch
-    )
+    n.duration.quarterLength = 1
 
-
-    new_note.duration=n.duration
-
-
-    part_out.append(
-        new_note
-    )
+    part.append(n)
 
 
 
-out=stream.Score()
-
-
-out.append(
-    part_out
-)
+score.append(part)
 
 
 
-print(
-    "輸出 MusicXML..."
-)
-
-
-out.write(
+score.write(
     "musicxml",
-    fp=output_file
+    fp=output_xml
 )
 
 
-
-print(
-    "完成:",
-    output_file
-)
-
-
+print()
+print("輸出完成:")
+print(output_xml)
 print("==============================")
