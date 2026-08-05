@@ -1,333 +1,180 @@
-# midi_to_musicxml_clean.py
+# ==========================================================
+# midi_to_musicxml_clean.py V29
 #
-# JianpuTool MVP 1.2.2
+# JianpuTool
+# MIDI -> MusicXML
 #
-# V28.3
-# Test_v3 Melody Ranking Engine
+# Features:
+# 1. Auto detect Vocal MIDI
+# 2. Auto detect Melody / Lead track
+# 3. Fallback single track melody extraction
+# 4. Clean melody output
 #
+# ==========================================================
 
 import sys
+import copy
 
 from music21 import converter
 from music21 import stream
 from music21 import note
+from music21 import chord
+from music21 import instrument
 from music21 import meter
 from music21 import tempo
-from music21.pitch import Pitch
 
 
-print("==============================")
-print(" MIDI TO MUSICXML CLEAN V28.3")
-print(" Test_v3 Melody Ranking Engine")
-print("==============================")
+# ----------------------------------------------------------
+# 找 Vocal Track
+# ----------------------------------------------------------
 
-
-# ==================================
-# Test_v3 小星星模板
-# ==================================
-
-TWINKLE_TEMPLATE = [
-
-    60,60,67,67,
-    69,69,67,
-
-    65,65,
-    64,64,
-    62,62,
-    60,
-
-    67,67,
-    65,65,
-    64,64,
-    62,
-
-    67,67,
-    65,65,
-    64,64,
-    62,
-
-    60,60,
-    67,67,
-    69,69,
-    67,
-
-    65,65,
-    64,64,
-    62,62,
-    60
-
+VOCAL_KEYS = [
+    "vocal",
+    "voice",
+    "melody",
+    "lead",
+    "singer",
+    "sing"
 ]
 
 
-# ==================================
-# MIDI旋律抽取
-# ==================================
+def find_vocal_part(score):
 
-def extract_melody(mid):
+    for part in score.parts:
 
+        name = ""
 
-    print("分析 MIDI 軌...")
+        if part.partName:
+            name = str(part.partName).lower()
 
 
-    events=[]
+        if any(k in name for k in VOCAL_KEYS):
 
+            print(
+                "找到 Vocal Track:",
+                part.partName
+            )
 
-    for idx, part in enumerate(mid.parts):
+            return part
 
 
-        temp=[]
+    return None
 
 
-        for n in part.flatten().notes:
 
+# ----------------------------------------------------------
+# 分析音域
+# ----------------------------------------------------------
 
-            # Chord
-            if n.isChord:
+def get_notes(part):
 
-
-                pitch=max(
-                    p.midi
-                    for p in n.pitches
-                )
-
-
-            else:
-
-                pitch=n.pitch.midi
-
-
-
-            # 移除低音伴奏
-
-            if pitch >= 60:
-
-
-                temp.append(
-                    (
-                        n.offset,
-                        pitch
-                    )
-                )
-
-
-        print(
-            f"TRACK {idx} notes:{len(temp)}"
-        )
-
-
-        if len(temp)>len(events):
-
-            events=temp
-
-
-
-    print("選擇旋律 Track")
-
-
-    # 時間排序
-
-    events.sort(
-        key=lambda x:x[0]
-    )
-
-
-    melody=[]
-
-
-    last_offset=None
-
-
-
-    # 同時間只留最高音
-
-    for offset,pitch in events:
-
-
-        if offset != last_offset:
-
-
-            melody.append(pitch)
-
-            last_offset=offset
-
-
-        else:
-
-
-            if pitch > melody[-1]:
-
-                melody[-1]=pitch
-
-
-
-    print("------------------------------")
-    print(
-        "旋律音符:",
-        len(melody)
-    )
-
-
-    for p in melody[:20]:
-
-        print(
-            Pitch(p)
-        )
-
-
-    return melody
-
-
-
-# ==================================
-# 小星星偵測
-# ==================================
-
-def detect_twinkle(notes):
-
-
-    print("------------------------------")
-    print("Twinkle Search")
-
-
-    target=[
-
-        60,60,
-        67,67,
-        69,69
-
+    return [
+        n for n in part.recurse().notes
+        if isinstance(n, note.Note)
     ]
 
 
-    best=999
+
+# ----------------------------------------------------------
+# 單軌 MIDI 抽主旋律
+# ----------------------------------------------------------
+
+def extract_melody(part):
+
+    print("啟動 Melody Extractor")
 
 
-    for start in range(
-        0,
-        min(8,len(notes)-6)
-    ):
+    notes = []
 
+    for n in part.recurse().notes:
 
-        head=notes[start:start+6]
+        if isinstance(n, note.Note):
 
+            notes.append(n)
 
-        diff=sum(
+        elif isinstance(n, chord.Chord):
 
-            abs(a-b)
-
-            for a,b in zip(
-                head,
-                target
+            # 保留最高音
+            highest = max(
+                n.notes,
+                key=lambda x:x.pitch.midi
             )
 
-        )
+            notes.append(highest)
 
 
-        print(
-            "position",
-            start,
-            "diff",
-            diff
-        )
-
-
-        if diff < best:
-
-            best=diff
-
+    # 排除低音
+    filtered = [
+        n for n in notes
+        if n.pitch.midi >= 48
+    ]
 
 
     print(
-        "Best Twinkle diff:",
-        best
+        "原始音符:",
+        len(notes)
     )
-
-
-
-    if best <= 2:
-
-
-        print(
-            "⭐ Test_v3 Twinkle Template Enabled"
-        )
-
-
-        return TWINKLE_TEMPLATE
-
-
 
     print(
-        "一般旋律"
+        "保留旋律:",
+        len(filtered)
     )
 
 
-    return notes
+    new_part = stream.Part()
 
+    for n in filtered:
 
-
-
-# ==================================
-# 建立 MusicXML
-# ==================================
-
-def create_musicxml(notes, output):
-
-
-    s=stream.Stream()
-
-
-    s.append(
-        meter.TimeSignature(
-            "4/4"
+        new_part.append(
+            copy.deepcopy(n)
         )
+
+
+    return new_part
+
+
+
+# ----------------------------------------------------------
+# 建立4/4小節
+# ----------------------------------------------------------
+
+def rebuild_measures(part):
+
+    result = stream.Part()
+
+
+    result.append(
+        meter.TimeSignature("4/4")
     )
 
 
-    s.append(
+    result.append(
         tempo.MetronomeMark(
-            number=120
+            number=80
         )
     )
 
 
-    for p in notes:
+    for n in part.notes:
+
+        result.append(n)
 
 
-        n=note.Note(
-            p
-        )
-
-
-        n.duration.quarterLength=1
-
-
-        s.append(n)
+    return result
 
 
 
-    s.write(
-        "musicxml",
-        fp=output
-    )
+# ----------------------------------------------------------
+# main
+# ----------------------------------------------------------
+
+if __name__ == "__main__":
 
 
-    print(
-        "完成:",
-        output
-    )
-
-
-
-# ==================================
-# Main
-# ==================================
-
-if __name__=="__main__":
-
-
-    if len(sys.argv)<3:
+    if len(sys.argv) < 3:
 
         print(
-            "Usage:"
+            "使用:"
         )
 
         print(
@@ -337,41 +184,113 @@ if __name__=="__main__":
         sys.exit()
 
 
+    midi_file = sys.argv[1]
 
-    midi_file=sys.argv[1]
-
-    output=sys.argv[2]
-
-
-    print(
-        "讀取 MIDI..."
-    )
+    output = sys.argv[2]
 
 
-    midi=converter.parse(
+    print("讀取 MIDI...")
+
+
+    score = converter.parse(
         midi_file
     )
 
 
-    melody=extract_melody(
-        midi
+    print(
+        "Tracks:",
+        len(score.parts)
     )
 
 
-    melody=detect_twinkle(
-        melody
+
+    # -------------------------
+    # Step 1 Vocal
+    # -------------------------
+
+    vocal = find_vocal_part(score)
+
+
+    if vocal:
+
+        print(
+            "模式: Vocal MIDI"
+        )
+
+        melody = copy.deepcopy(vocal)
+
+
+
+    else:
+
+        print(
+            "沒有 Vocal Track"
+        )
+
+
+        if len(score.parts) == 1:
+
+            print(
+                "模式: 單軌 MIDI"
+            )
+
+            melody = extract_melody(
+                score.parts[0]
+            )
+
+
+        else:
+
+            print(
+                "模式: 多軌搜尋最高旋律"
+            )
+
+
+            best = None
+            best_count = 0
+
+
+            for part in score.parts:
+
+                count = len(
+                    get_notes(part)
+                )
+
+
+                if count > best_count:
+
+                    best_count = count
+                    best = part
+
+
+            melody = extract_melody(best)
+
+
+
+    # -------------------------
+    # 建立 MusicXML
+    # -------------------------
+
+    print(
+        "建立 MusicXML..."
+    )
+
+
+    final_score = stream.Score()
+
+
+    final_score.append(
+        rebuild_measures(melody)
+    )
+
+
+    final_score.write(
+        "musicxml",
+        fp=output
     )
 
 
     print(
-        "輸出 MusicXML..."
-    )
-
-
-    create_musicxml(
-        melody,
+        "完成:",
         output
     )
-
-
-    print("==============================")
