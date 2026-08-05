@@ -1,14 +1,12 @@
 # ==========================================================
-# midi_to_musicxml_clean.py V30.1
+# midi_to_musicxml_clean.py V30.2
 #
 # JianpuTool
 #
 # MIDI -> MusicXML
 #
-# Melody Extractor Pro FIX
-#
-# Fix:
-#   offset=0 bug
+# Melody Extractor Pro
+# Final Measure Builder
 #
 # ==========================================================
 
@@ -21,11 +19,12 @@ from music21 import note
 from music21 import chord
 from music21 import meter
 from music21 import tempo
+from music21 import duration
 
 
 
 # ----------------------------------------------------------
-# Vocal Track 搜尋
+# Vocal Track
 # ----------------------------------------------------------
 
 VOCAL_KEYS = [
@@ -57,7 +56,6 @@ def find_vocal_part(score):
 
             return part
 
-
     return None
 
 
@@ -76,11 +74,7 @@ def extract_melody_pro(part):
     raw = []
 
 
-    # 使用 flatten 保留 offset
-    elements = part.flatten().notes
-
-
-    for element in elements:
+    for element in part.flatten().notes:
 
 
         if isinstance(element, note.Note):
@@ -113,10 +107,7 @@ def extract_melody_pro(part):
     )
 
 
-
-    # -----------------------------
-    # 1. 移除低音
-    # -----------------------------
+    # 去低音
 
     raw = [
 
@@ -134,15 +125,12 @@ def extract_melody_pro(part):
 
 
 
-    # -----------------------------
-    # 2. 同時間保留最高音
-    # -----------------------------
+    # 同時間最高音
 
     timeline = {}
 
 
     for n in raw:
-
 
         key = round(
             float(n.offset),
@@ -150,19 +138,14 @@ def extract_melody_pro(part):
         )
 
 
-        if key not in timeline:
-
+        if (
+            key not in timeline
+            or
+            n.pitch.midi >
+            timeline[key].pitch.midi
+        ):
 
             timeline[key] = n
-
-
-
-        else:
-
-
-            if n.pitch.midi > timeline[key].pitch.midi:
-
-                timeline[key] = n
 
 
 
@@ -176,7 +159,6 @@ def extract_melody_pro(part):
     )
 
 
-
     print(
         "時間去重後:",
         len(melody)
@@ -184,83 +166,133 @@ def extract_melody_pro(part):
 
 
 
-    # -----------------------------
-    # 3. 移除過短裝飾音
-    # -----------------------------
-
-    cleaned = []
-
-
-    for n in melody:
-
-
-        if n.duration.quarterLength >= 0.25:
-
-            cleaned.append(n)
-
-
-
-    print(
-        "節奏過濾後:",
-        len(cleaned)
-    )
-
-
-
-    result = stream.Part()
-
-
-    for n in cleaned:
-
-        result.append(
-            n
-        )
-
-
-    return result
-
+    return melody
 
 
 
 # ----------------------------------------------------------
-# 建立 MusicXML
+# V30.2 Measure Builder
 # ----------------------------------------------------------
 
-def build_score(part):
+def build_measure_score(notes):
+
 
     score = stream.Score()
 
 
-    new_part = stream.Part()
+    part = stream.Part()
 
 
-    new_part.append(
+    part.append(
         meter.TimeSignature("4/4")
     )
 
 
-    new_part.append(
+    part.append(
         tempo.MetronomeMark(
             number=80
         )
     )
 
 
-    for n in part.notes:
+    measure_no = 1
 
-        new_part.insert(
-            n.offset,
-            n
+
+    current_measure = stream.Measure(
+        number=measure_no
+    )
+
+
+    beat = 0.0
+
+
+    for n in notes:
+
+
+        ql = float(
+            n.duration.quarterLength
         )
 
 
+        # 超過小節
+
+        if beat + ql > 4.0:
+
+
+            rest_len = 4.0 - beat
+
+
+            if rest_len > 0:
+
+
+                r = note.Rest()
+
+
+                r.duration = duration.Duration(
+                    rest_len
+                )
+
+                current_measure.append(r)
+
+
+
+            part.append(
+                current_measure
+            )
+
+
+            measure_no += 1
+
+
+            current_measure = stream.Measure(
+                number=measure_no
+            )
+
+
+            beat = 0.0
+
+
+
+        new_note = copy.deepcopy(n)
+
+
+        current_measure.append(
+            new_note
+        )
+
+
+        beat += ql
+
+
+
+    # 最後一小節補滿
+
+    if beat < 4.0:
+
+
+        r = note.Rest()
+
+
+        r.duration = duration.Duration(
+            4.0 - beat
+        )
+
+
+        current_measure.append(r)
+
+
+
+    part.append(
+        current_measure
+    )
+
+
     score.append(
-        new_part
+        part
     )
 
 
     return score
-
 
 
 
@@ -284,6 +316,7 @@ if __name__ == "__main__":
     midi_file = sys.argv[1]
 
     output = sys.argv[2]
+
 
 
     print(
@@ -315,7 +348,13 @@ if __name__ == "__main__":
         )
 
 
-        melody = copy.deepcopy(vocal)
+        notes = [
+
+            n for n in vocal.flatten().notes
+
+            if isinstance(n, note.Note)
+
+        ]
 
 
 
@@ -330,7 +369,7 @@ if __name__ == "__main__":
         if len(score.parts) == 1:
 
 
-            melody = extract_melody_pro(
+            notes = extract_melody_pro(
                 score.parts[0]
             )
 
@@ -338,34 +377,29 @@ if __name__ == "__main__":
         else:
 
 
-            print(
-                "多軌選擇最佳旋律"
-            )
-
-
             best = max(
                 score.parts,
-                key=lambda p: len(p.flatten().notes)
+                key=lambda p:len(p.flatten().notes)
             )
 
 
-            melody = extract_melody_pro(
+            notes = extract_melody_pro(
                 best
             )
 
 
 
     print(
-        "建立 MusicXML..."
+        "建立 4/4 MusicXML..."
     )
 
 
-    final = build_score(
-        melody
+    final_score = build_measure_score(
+        notes
     )
 
 
-    final.write(
+    final_score.write(
         "musicxml",
         fp=output
     )
