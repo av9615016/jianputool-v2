@@ -1,22 +1,52 @@
+# ==========================================
+# JianpuTool MVP 1.3
+# Streamlit FINAL
+#
+# Audio / MIDI
+# ↓
+# BasicPitch MIDI
+# ↓
+# MusicXML Clean
+# ↓
+# Jianpu Fix
+# ↓
+# Jianpu-ly
+# ↓
+# LY Cleaner
+# ↓
+# LilyPond PDF
+#
+# Output:
+# MIDI
+# MusicXML
+# Staff PDF
+# Jianpu PDF
+# ==========================================
+
+
 import streamlit as st
 import os
 import uuid
 import subprocess
 import sys
-import shutil
+import traceback
 
 
-# ==========================
+
+# ==========================================
 # Page
-# ==========================
+# ==========================================
 
 st.set_page_config(
-    page_title="JianpuTool MVP 1.5",
+    page_title="JianpuTool MVP 1.3",
     page_icon="🎵"
 )
 
 
-st.title("🎵 JianpuTool MVP 1.5")
+st.title(
+    "🎵 JianpuTool MVP 1.3"
+)
+
 
 st.write(
 """
@@ -26,25 +56,39 @@ Pipeline:
 
 Audio
 ↓
-MIDI
+BasicPitch MIDI
 ↓
 MusicXML
 ↓
 Jianpu
 ↓
 LilyPond PDF
+
+
+輸出：
+
+🎹 MIDI
+
+🎼 MusicXML
+
+🎼 五線譜 PDF
+
+🔢 簡譜 PDF
 """
 )
 
 
 
-# ==========================
-# Command
-# ==========================
+# ==========================================
+# command
+# ==========================================
 
 def run_cmd(cmd):
 
-    st.code(" ".join(cmd))
+    st.code(
+        " ".join(cmd)
+    )
+
 
     result = subprocess.run(
         cmd,
@@ -53,18 +97,25 @@ def run_cmd(cmd):
         text=True
     )
 
-    st.text(result.stdout)
+
+    st.text(
+        result.stdout
+    )
+
 
     if result.returncode != 0:
-        raise Exception(result.stdout)
+
+        raise Exception(
+            result.stdout
+        )
 
 
 
-# ==========================
-# Upload
-# ==========================
+# ==========================================
+# upload
+# ==========================================
 
-upload = st.file_uploader(
+uploaded = st.file_uploader(
     "上傳 MP3 / WAV / MIDI",
     type=[
         "mp3",
@@ -76,25 +127,27 @@ upload = st.file_uploader(
 
 
 
-if upload:
+if uploaded:
 
 
     uid = str(uuid.uuid4())[:8]
 
-    output_dir = os.path.join(
+
+    outdir = os.path.join(
         "outputs",
         uid
     )
 
+
     os.makedirs(
-        output_dir,
+        outdir,
         exist_ok=True
     )
 
 
     input_file = os.path.join(
-        output_dir,
-        upload.name
+        outdir,
+        uploaded.name
     )
 
 
@@ -104,33 +157,44 @@ if upload:
     ) as f:
 
         f.write(
-            upload.getbuffer()
+            uploaded.getbuffer()
         )
 
 
     st.success(
-        "上傳完成"
+        f"上傳完成: {uploaded.name}"
     )
+
 
 
     try:
 
 
-        # ======================
-        # MIDI
-        # ======================
+        ext = uploaded.name.lower().split(".")[-1]
 
-        if upload.name.lower().endswith(
-            (".mid",".midi")
-        ):
+
+        # ==================================
+        # Audio -> MIDI
+        # ==================================
+
+        if ext in [
+            "mid",
+            "midi"
+        ]:
 
             midi_file = input_file
 
 
         else:
 
+
+            st.info(
+                "Audio → MIDI"
+            )
+
+
             midi_file = os.path.join(
-                output_dir,
+                outdir,
                 "melody.mid"
             )
 
@@ -146,12 +210,12 @@ if upload:
 
 
 
-        # ======================
+        # ==================================
         # MIDI -> MusicXML
-        # ======================
+        # ==================================
 
         raw_xml = os.path.join(
-            output_dir,
+            outdir,
             "raw.musicxml"
         )
 
@@ -167,12 +231,12 @@ if upload:
 
 
 
-        # ======================
-        # clean
-        # ======================
+        # ==================================
+        # Clean MusicXML
+        # ==================================
 
         clean_xml = os.path.join(
-            output_dir,
+            outdir,
             "clean.musicxml"
         )
 
@@ -188,12 +252,12 @@ if upload:
 
 
 
-        # ======================
-        # final fix
-        # ======================
+        # ==================================
+        # Jianpu Fix
+        # ==================================
 
         final_xml = os.path.join(
-            output_dir,
+            outdir,
             "final.musicxml"
         )
 
@@ -209,139 +273,231 @@ if upload:
 
 
 
-        # ======================
-        # jianpu-ly
-        # ======================
+        # ==================================
+        # MusicXML -> LY
+        # ==================================
+
+        raw_ly = os.path.join(
+            outdir,
+            "final_raw.ly"
+        )
+
+
+        final_ly = os.path.join(
+            outdir,
+            "final.ly"
+        )
+
+
+        st.info(
+            "產生 LilyPond..."
+        )
+
+
+        with open(
+            raw_ly,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "jianpu_ly",
+                    final_xml
+                ],
+                stdout=f,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+
+
+            if result.returncode != 0:
+
+                raise Exception(
+                    result.stderr
+                )
+
+
+        st.success(
+            "LY 產生完成"
+        )
+
+
+
+        # ==================================
+        # LY Cleaner
+        # ==================================
 
         run_cmd(
             [
                 sys.executable,
-                "-m",
-                "jianpu_ly",
-                final_xml
+                "jianpu_ly_cleaner.py",
+                raw_ly,
+                final_ly
             ]
         )
 
 
 
-        # ======================
-        # 找 ly
-        # ======================
+        # ==================================
+        # LilyPond PDF
+        # ==================================
 
-        ly_files = []
-
-
-        for f in os.listdir(output_dir):
-
-            if f.endswith(".ly"):
-
-                ly_files.append(f)
-
-
-
-        if not ly_files:
-
-            raise Exception(
-                "jianpu_ly 沒有產生 .ly"
-            )
-
-
-
-        source_ly = os.path.join(
-            output_dir,
-            ly_files[0]
+        pdf_base = os.path.join(
+            outdir,
+            "jianpu"
         )
 
-
-        fixed_ly = os.path.join(
-            output_dir,
-            "final_fix.ly"
-        )
-
-
-
-        # ======================
-        # ly fix
-        # ======================
-
-        run_cmd(
-            [
-                sys.executable,
-                "ly_fix_v1.py",
-                source_ly,
-                fixed_ly
-            ]
-        )
-
-
-
-        if not os.path.exists(
-            fixed_ly
-        ):
-
-            raise Exception(
-                "final_fix.ly 不存在"
-            )
-
-
-
-        # ======================
-        # LilyPond
-        # ======================
 
         run_cmd(
             [
                 "lilypond",
                 "-o",
-                os.path.join(
-                    output_dir,
-                    "jianpu"
-                ),
-                fixed_ly
+                pdf_base,
+                "--pdf",
+                final_ly
             ]
         )
 
 
-
-        pdf = os.path.join(
-            output_dir,
-            "jianpu.pdf"
+        jianpu_pdf = (
+            pdf_base
+            +
+            ".pdf"
         )
 
 
-        if os.path.exists(pdf):
 
-            st.success(
-                "🎉 完成"
-            )
+        # ==================================
+        # Download
+        # ==================================
 
+        st.divider()
+
+        st.header(
+            "📥 下載輸出"
+        )
+
+
+
+        # MIDI
+
+        if os.path.exists(midi_file):
 
             with open(
-                pdf,
+                midi_file,
                 "rb"
             ) as f:
 
+
                 st.download_button(
-                    "下載簡譜 PDF",
+                    "🎹 下載 MIDI",
+                    f,
+                    file_name="melody.mid",
+                    mime="audio/midi"
+                )
+
+
+
+        # MusicXML
+
+        if os.path.exists(final_xml):
+
+            with open(
+                final_xml,
+                "rb"
+            ) as f:
+
+
+                st.download_button(
+                    "🎼 下載 MusicXML",
+                    f,
+                    file_name="score.musicxml",
+                    mime="application/xml"
+                )
+
+
+
+        # Jianpu PDF
+
+        if os.path.exists(jianpu_pdf):
+
+            with open(
+                jianpu_pdf,
+                "rb"
+            ) as f:
+
+
+                st.download_button(
+                    "🔢 下載簡譜 PDF",
                     f,
                     file_name="jianpu.pdf",
                     mime="application/pdf"
                 )
 
 
-        else:
 
-            raise Exception(
-                "PDF 沒有產生"
-            )
+        # Staff PDF
+
+        staff_base = os.path.join(
+            outdir,
+            "staff"
+        )
+
+
+        run_cmd(
+            [
+                "lilypond",
+                "-o",
+                staff_base,
+                "--pdf",
+                final_ly
+            ]
+        )
+
+
+        staff_pdf = (
+            staff_base
+            +
+            ".pdf"
+        )
+
+
+        if os.path.exists(staff_pdf):
+
+
+            with open(
+                staff_pdf,
+                "rb"
+            ) as f:
+
+
+                st.download_button(
+                    "🎼 下載五線譜 PDF",
+                    f,
+                    file_name="staff.pdf",
+                    mime="application/pdf"
+                )
 
 
 
-    except Exception as e:
+        st.success(
+            "🎉 全部完成"
+        )
+
+
+
+    except Exception:
 
 
         st.error(
-            "轉換失敗"
+            "❌ 轉換失敗"
         )
 
-        st.exception(e)
+
+        st.code(
+            traceback.format_exc()
+        )
