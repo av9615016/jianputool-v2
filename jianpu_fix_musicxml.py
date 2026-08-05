@@ -1,16 +1,15 @@
 """
-jianpu_fix_musicxml.py V19
-JianpuTool Melody Preserve Engine
+JIANPU FIX MUSICXML V20
+Final Melody Lock Engine
 
 Purpose:
-Keep melody order.
-Only fix MusicXML structure.
+MusicXML -> Jianpu stable conversion
 
-MusicXML
- -> Preserve Notes
- -> Fix Time Signature
- -> Fix Measures
- -> Output
+Features:
+- Preserve melody
+- Lock C major
+- Lock octave
+- Remove interference
 """
 
 
@@ -19,30 +18,29 @@ import copy
 
 from music21 import converter
 from music21 import stream
-from music21 import meter
 from music21 import note
+from music21 import meter
+from music21 import key
 from music21 import tempo
 
 
 
 print("==============================")
-print(" JIANPU FIX MUSICXML V19")
-print(" Melody Preserve Engine")
+print(" JIANPU FIX MUSICXML V20")
+print(" Final Melody Lock Engine")
 print("==============================")
 
 
-
-if len(sys.argv) < 3:
+if len(sys.argv)<3:
 
     sys.exit(
         "python jianpu_fix_musicxml.py input.musicxml output.musicxml"
     )
 
 
+input_file=sys.argv[1]
 
-input_file = sys.argv[1]
-
-output_file = sys.argv[2]
+output_file=sys.argv[2]
 
 
 
@@ -54,70 +52,71 @@ output_file = sys.argv[2]
 print("load musicxml")
 
 
-score = converter.parse(
+score=converter.parse(
     input_file
 )
 
 
 
 # ==========================
-# Extract original notes
+# Extract melody
 # ==========================
 
 
-print("preserve melody")
+melody=[]
 
 
-
-notes=[]
-
-
-for n in score.flatten().notes:
+for n in score.flat.notes:
 
 
     if isinstance(n,note.Note):
 
-        notes.append(
-            copy.deepcopy(n)
+        melody.append(
+            n
         )
 
 
 
 print(
     "notes:",
-    len(notes)
+    len(melody)
 )
 
 
 
-# ==========================
-# Show melody
-# ==========================
-
-
 print("------------------------------")
-print("MELODY CHECK")
+print("MELODY LOCK CHECK")
 
 
-for n in notes[:30]:
+
+for n in melody[:20]:
 
     print(
         n.pitch.nameWithOctave
     )
 
 
-print("------------------------------")
-
-
 
 # ==========================
-# Rebuild Part
+# Create clean score
 # ==========================
 
 
-part = stream.Part()
+part=stream.Part()
 
 
+
+# Key
+
+part.append(
+    key.KeySignature(
+        0
+    )
+)
+
+
+
+# Time
 
 part.append(
     meter.TimeSignature(
@@ -135,34 +134,55 @@ part.append(
 
 
 
-for n in notes:
+# ==========================
+# Copy notes
+# ==========================
 
 
-    # 保留原音符
+for old in melody:
+
+
+    new=note.Note()
+
+
+    # lock pitch
+
+    new.pitch.midi = old.pitch.midi
+
+
+
+    # preserve duration
+
+    new.duration = copy.deepcopy(
+        old.duration
+    )
+
+
+
+    # remove accidental ambiguity
+
+    new.pitch.accidental=None
+
+
 
     part.append(
-        n
+        new
     )
 
 
 
 # ==========================
-# Make score
+# Build score
 # ==========================
 
 
-out = stream.Score()
+out=stream.Score()
 
 
 out.append(
     part
 )
 
-
-
-# ==========================
-# Write
-# ==========================
 
 
 print(
@@ -182,6 +202,5 @@ out.write(
 print(
     "DONE"
 )
-
 
 print("==============================")
