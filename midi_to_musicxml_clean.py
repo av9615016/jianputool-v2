@@ -1,13 +1,11 @@
 """
-MIDI TO MUSICXML CLEAN V23
-JianpuTool Melody Verify Engine
+MIDI TO MUSICXML CLEAN V24
+JianpuTool Melody Deduplicate Engine
 
-功能:
-1. 分析 MIDI Track
-2. 抽取主旋律
-3. 顯示音符
-4. 小星星檢查
-5. 輸出 MusicXML
+MIDI
+ -> Melody Track
+ -> Remove Duplicate Notes
+ -> MusicXML
 """
 
 
@@ -22,8 +20,8 @@ from music21 import note
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V23")
-print(" Melody Verify Engine")
+print(" MIDI TO MUSICXML CLEAN V24")
+print(" Melody Deduplicate Engine")
 print("==============================")
 
 
@@ -59,33 +57,32 @@ score = converter.parse(
 
 
 # ==========================
-# Track Analysis
+# Find Melody Track
 # ==========================
 
 
 print("分析 MIDI 軌...")
 
 
-tracks = []
+best_part = None
+
+best_score = -1
 
 
 
 for index, part in enumerate(score.parts):
 
 
-    notes = []
+    notes = [
+
+        n for n in part.flat.notes
+
+        if isinstance(n, note.Note)
+
+    ]
 
 
-    for n in part.flat.notes:
-
-
-        if isinstance(n, note.Note):
-
-            notes.append(n)
-
-
-
-    if not notes:
+    if len(notes) == 0:
 
         continue
 
@@ -100,11 +97,12 @@ for index, part in enumerate(score.parts):
     ]
 
 
-
     pitch_range = (
+
         max(pitches)
         -
         min(pitches)
+
     )
 
 
@@ -114,20 +112,18 @@ for index, part in enumerate(score.parts):
     )
 
 
-    # 旋律評分
 
-    score_value = 0
+    score_value = (
 
+        min(len(notes),100)
 
-    score_value += min(
-        len(notes),
-        100
     )
 
 
     if pitch_range <= 24:
 
         score_value += 30
+
 
 
     if unique <= 15:
@@ -148,28 +144,20 @@ for index, part in enumerate(score.parts):
     )
 
 
-    tracks.append(
-        (
-            score_value,
-            part
-        )
-    )
+
+    if score_value > best_score:
+
+        best_score = score_value
+
+        best_part = part
 
 
 
-if not tracks:
+if best_part is None:
 
     raise Exception(
-        "沒有找到 MIDI 音符"
+        "找不到旋律"
     )
-
-
-
-best_part = sorted(
-    tracks,
-    key=lambda x:x[0],
-    reverse=True
-)[0][1]
 
 
 
@@ -180,7 +168,7 @@ print(
 
 
 # ==========================
-# Extract Melody
+# Original Melody
 # ==========================
 
 
@@ -203,17 +191,11 @@ print(
 
 
 
-# ==========================
-# Print Melody
-# ==========================
-
-
 print("------------------------------")
-print("旋律音符檢查:")
+print("原始旋律:")
 
 
-for n in melody[:50]:
-
+for n in melody[:40]:
 
     print(
         n.pitch.nameWithOctave
@@ -225,82 +207,52 @@ print("------------------------------")
 
 
 # ==========================
-# Twinkle Check
-# ==========================
-
-
-twinkle = [
-
-    "C4",
-    "C4",
-    "G4",
-    "G4",
-    "A4",
-    "A4",
-    "G4",
-
-]
-
-
-test = [
-
-    n.pitch.nameWithOctave
-
-    for n in melody[:7]
-
-]
-
-
-
-if test == twinkle:
-
-    print(
-        "⭐ 偵測到小星星旋律!"
-    )
-
-else:
-
-    print(
-        "⚠ 不是標準小星星開頭"
-    )
-
-
-
-# ==========================
-# Remove duplicate
+# Deduplicate
 # ==========================
 
 
 clean = []
 
 
-last_pitch = None
-
-last_offset = None
-
-
-
 for n in melody:
 
 
-    pitch = n.pitch.midi
+    if len(clean) == 0:
+
+        clean.append(n)
+
+        continue
 
 
-    offset = round(
-        n.offset,
-        3
-    )
 
+    last = clean[-1]
+
+
+    # 同音且時間非常接近
 
     if (
 
-        pitch == last_pitch
+        n.pitch.midi
+        ==
+        last.pitch.midi
 
         and
 
-        offset == last_offset
+        abs(
+            n.offset-last.offset
+        )
+        <
+        0.1
 
     ):
+
+
+        # 合併 duration
+
+        if n.duration.quarterLength > last.duration.quarterLength:
+
+            last.duration = n.duration
+
 
         continue
 
@@ -309,16 +261,26 @@ for n in melody:
     clean.append(n)
 
 
-    last_pitch = pitch
-
-    last_offset = offset
-
-
 
 print(
-    "清理後:",
+    "去重後:",
     len(clean)
 )
+
+
+
+print("------------------------------")
+print("清理旋律:")
+
+
+for n in clean[:40]:
+
+    print(
+        n.pitch.nameWithOctave
+    )
+
+
+print("------------------------------")
 
 
 
@@ -355,8 +317,6 @@ for n in clean:
     )
 
 
-    # 保留原節奏
-
     new_note.duration = (
         n.duration
     )
@@ -387,7 +347,6 @@ score_out.append(
 print(
     "輸出 MusicXML..."
 )
-
 
 
 score_out.write(
