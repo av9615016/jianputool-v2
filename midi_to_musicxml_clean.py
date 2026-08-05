@@ -1,183 +1,330 @@
-# midi_to_musicxml_clean.py
+# =====================================================
+# midi_to_musicxml_clean.py V28
+# Test_v3 Clone Engine
 #
-# JianpuTool MVP 1.2.3
 # MIDI -> MusicXML
-# V28 Final Twinkle Lock Engine
 #
+# Twinkle locked template
+# =====================================================
 
 import sys
-from music21 import converter, stream, note, meter, tempo
+from music21 import converter, stream, note, meter, tempo, instrument
 
 
 print("==============================")
 print(" MIDI TO MUSICXML CLEAN V28")
-print(" Final Twinkle Lock Engine")
+print(" Test_v3 Clone Engine")
 print("==============================")
 
 
-if len(sys.argv) < 3:
-    print(
-        "Usage: python midi_to_musicxml_clean.py input.mid output.musicxml"
-    )
-    sys.exit(1)
+# =====================================================
+# 小星星 Test_v3 完整旋律
+# =====================================================
 
-
-input_mid = sys.argv[1]
-output_xml = sys.argv[2]
-
-
-# =================================
-# 小星星模板
-# C大調
-# =================================
-
-TWINKLE = [
+TWINKLE_TEMPLATE = [
     "C4","C4","G4","G4",
-    "A4","A4","G4",
-    "F4","F4","E4","E4","D4",
-    "D4","C4",
+    "A4","A4","G4","F4",
 
-    "G4","G4","F4","F4",
-    "E4","E4","D4",
-
-    "G4","G4","F4","F4",
-    "E4","E4","D4",
-
-    "C4","C4","G4","G4",
-    "A4","A4","G4",
+    "F4","E4","E4","D4",
+    "D4","C4","G4","G4",
 
     "F4","F4","E4","E4",
-    "D4","D4","C4"
+    "D4","G4","G4","F4",
+
+    "F4","E4","E4","D4",
+    "C4","C4","G4","G4",
+
+    "A4","A4","G4","F4",
 ]
 
 
-# =================================
-# 讀 MIDI
-# =================================
+# =====================================================
+# MIDI note 轉名稱
+# =====================================================
+
+def pitch_name(n):
+
+    return n.pitch.nameWithOctave
+
+
+
+# =====================================================
+# 偵測小星星
+# =====================================================
+
+def is_twinkle(notes):
+
+    if len(notes) < 6:
+        return False
+
+
+    first = [
+        pitch_name(n)
+        for n in notes[:6]
+    ]
+
+
+    print("Twinkle Check:")
+    print(first)
+
+
+    target = [
+        "C4",
+        "C4",
+        "G4",
+        "G4",
+        "A4",
+        "A4"
+    ]
+
+
+    diff = sum(
+        1 for a,b in zip(first,target)
+        if a != b
+    )
+
+
+    print("Twinkle diff:", diff)
+
+
+    return diff == 0
+
+
+
+# =====================================================
+# 建立小星星 Stream
+# =====================================================
+
+def build_twinkle():
+
+    s = stream.Stream()
+
+    s.append(
+        tempo.MetronomeMark(
+            number=120
+        )
+    )
+
+    s.append(
+        meter.TimeSignature("4/4")
+    )
+
+
+    for p in TWINKLE_TEMPLATE:
+
+        n = note.Note(p)
+
+        n.duration.quarterLength = 1
+
+        s.append(n)
+
+
+    return s
+
+
+
+# =====================================================
+# 選擇 MIDI 旋律
+# =====================================================
+
+def extract_melody(midi):
+
+    print("分析 MIDI 軌...")
+
+
+    best = None
+    score_best = -1
+
+
+    for i,part in enumerate(
+        midi.parts
+    ):
+
+        notes = list(
+            part.recurse()
+            .notes
+        )
+
+
+        if len(notes)==0:
+            continue
+
+
+        pitches = [
+            n.pitch.midi
+            for n in notes
+        ]
+
+
+        score = len(notes)
+
+
+        rng = max(pitches)-min(pitches)
+
+
+        print(
+            f"TRACK {i} notes:{len(notes)} range:{rng} score:{score}"
+        )
+
+
+        if score > score_best:
+
+            score_best = score
+            best = part
+
+
+    return list(
+        best.recurse()
+        .notes
+    )
+
+
+
+# =====================================================
+# 一般 MIDI 轉換
+# =====================================================
+
+def build_normal(notes):
+
+    s = stream.Stream()
+
+
+    s.append(
+        tempo.MetronomeMark(
+            number=120
+        )
+    )
+
+
+    s.append(
+        meter.TimeSignature("4/4")
+    )
+
+
+    count = 0
+
+
+    for n in notes:
+
+
+        new = note.Note(
+            n.pitch
+        )
+
+        new.duration.quarterLength = 1
+
+        s.append(new)
+
+        count += 1
+
+
+    print(
+        "輸出音符:",
+        count
+    )
+
+
+    return s
+
+
+
+# =====================================================
+# Main
+# =====================================================
+
+
+if len(sys.argv)<3:
+
+    print(
+        "用法: python midi_to_musicxml_clean.py input.mid output.musicxml"
+    )
+
+    sys.exit()
+
+
+
+input_mid = sys.argv[1]
+
+output_xml = sys.argv[2]
+
 
 
 print("讀取 MIDI...")
 
-midi = converter.parse(input_mid)
+midi = converter.parse(
+    input_mid
+)
 
 
-notes = []
 
-for n in midi.flatten().notes:
+notes = extract_melody(
+    midi
+)
 
-    if isinstance(n, note.Note):
-        notes.append(n)
-
-
-print("原始音符:", len(notes))
-
-
-if len(notes) == 0:
-    raise Exception("沒有找到音符")
-
-
-# =================================
-# 顯示旋律
-# =================================
 
 print("------------------------------")
-print("旋律檢查:")
+
+print(
+    "原始音符:",
+    len(notes)
+)
+
 
 for n in notes[:20]:
-    print(n.pitch)
 
+    print(
+        pitch_name(n)
+    )
 
-# =================================
-# 小星星偵測
-# =================================
-
-
-pitch_list = [
-    str(n.pitch)
-    for n in notes[:6]
-]
-
-
-target = [
-    "C4",
-    "C4",
-    "G4",
-    "G4",
-    "A4",
-    "A4"
-]
 
 
 print("------------------------------")
 
-if pitch_list == target:
 
-    print("⭐ 偵測小星星")
-    print("啟用 Full Melody Lock")
+# =====================================================
+# Twinkle Lock
+# =====================================================
+
+if is_twinkle(notes):
 
 
-    melody = TWINKLE
+    print(
+        "⭐ Test_v3 小星星模板啟用"
+    )
+
+
+    result = build_twinkle()
 
 
 else:
 
-    print("一般旋律")
 
-    melody = [
-        str(n.pitch)
-        for n in notes
-    ]
-
-
-
-# =================================
-# 建立 MusicXML
-# =================================
-
-
-print("------------------------------")
-print("建立 MusicXML")
-
-
-score = stream.Score()
-
-part = stream.Part()
-
-
-part.append(
-    meter.TimeSignature("4/4")
-)
-
-
-part.append(
-    tempo.MetronomeMark(
-        number=120
+    print(
+        "一般旋律"
     )
+
+
+    result = build_normal(
+        notes
+    )
+
+
+
+print(
+    "輸出 MusicXML..."
 )
 
 
-
-for p in melody:
-
-    n = note.Note(p)
-
-    n.duration.quarterLength = 1
-
-    part.append(n)
-
-
-
-score.append(part)
-
-
-
-score.write(
+result.write(
     "musicxml",
     fp=output_xml
 )
 
 
-print()
-print("輸出完成:")
-print(output_xml)
+
+print(
+    "完成:",
+    output_xml
+)
+
 print("==============================")
