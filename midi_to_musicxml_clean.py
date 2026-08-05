@@ -1,403 +1,313 @@
-# ==========================================================
-# midi_to_musicxml_clean.py V32.2
+# midi_to_musicxml_clean.py
 #
-# JianpuTool
+# JianpuTool V33
 #
-# MIDI -> MusicXML
+# Vocal AI Melody Filter
 #
-# Vocal Track + Melody Tracking
+# BasicPitch Vocal MIDI
+#        |
+#        v
+# Vocal AI Filter
+#        |
+#        v
+# MusicXML
 #
-# ==========================================================
 
 import sys
-import copy
-
 from music21 import converter
 from music21 import stream
 from music21 import note
-from music21 import chord
 from music21 import meter
 from music21 import tempo
-from music21 import duration
+from music21 import instrument
 
 
-# ----------------------------------------------------------
-# 安全 duration
-# ----------------------------------------------------------
+# ==========================
+# V33 Filter Parameters
+# ==========================
 
-VALID_LENGTH = [
-    0.25,
-    0.5,
-    1.0,
-    2.0,
-    4.0
-]
+LOW_PITCH = 48       # C3
+HIGH_PITCH = 84      # C6
 
+MIN_DURATION = 0.12
 
-def quantize_length(x):
-
-    return min(
-        VALID_LENGTH,
-        key=lambda y:abs(y-x)
-    )
+MAX_JUMP = 12        # 最大跳音
 
 
+# ==========================
+# Arguments
+# ==========================
 
-def safe_rest(x):
-
-    x = quantize_length(x)
-
-    r = note.Rest()
-
-    r.duration = duration.Duration(
-        x
-    )
-
-    return r
-
-
-
-# ----------------------------------------------------------
-# Vocal Track
-# ----------------------------------------------------------
-
-def find_vocal(score):
-
-    keys = [
-        "vocal",
-        "voice",
-        "melody",
-        "lead",
-        "sing"
-    ]
-
-    for part in score.parts:
-
-        name=""
-
-        if part.partName:
-            name=str(
-                part.partName
-            ).lower()
-
-
-        if any(k in name for k in keys):
-
-            print(
-                "找到 Vocal:",
-                part.partName
-            )
-
-            return part
-
-
-    return None
-
-
-
-# ----------------------------------------------------------
-# 收集候選音
-# ----------------------------------------------------------
-
-def collect_notes(part):
-
-    result=[]
-
-
-    for e in part.flatten().notes:
-
-
-        if isinstance(e,note.Note):
-
-            n=copy.deepcopy(e)
-
-            result.append(n)
-
-
-        elif isinstance(e,chord.Chord):
-
-            # 和弦取最高音
-
-            n=max(
-                e.notes,
-                key=lambda x:x.pitch.midi
-            )
-
-            n=copy.deepcopy(n)
-
-            n.offset=e.offset
-
-            result.append(n)
-
-
-
-    return result
-
-
-
-# ----------------------------------------------------------
-# Melody Filter
-# ----------------------------------------------------------
-
-def melody_filter(notes):
-
-
+if len(sys.argv) < 3:
     print(
-        "原始:",
-        len(notes)
+        "python midi_to_musicxml_clean.py input.mid output.musicxml"
+    )
+    exit()
+
+
+input_mid = sys.argv[1]
+output_xml = sys.argv[2]
+
+
+# ==========================
+# Read MIDI
+# ==========================
+
+print("讀取 MIDI...")
+
+midi = converter.parse(
+    input_mid
+)
+
+
+notes = []
+
+for n in midi.flatten().notes:
+
+    if not isinstance(n, note.Note):
+        continue
+
+
+    pitch = n.pitch.midi
+
+    duration = float(
+        n.duration.quarterLength
     )
 
 
-    # 人聲範圍
-
-    notes=[
-        n for n in notes
-        if 55 <= n.pitch.midi <= 84
-    ]
-
-
-    print(
-        "音域篩選:",
-        len(notes)
+    notes.append(
+        {
+            "pitch": pitch,
+            "offset": float(n.offset),
+            "duration": duration
+        }
     )
 
 
-    # 同時間最高音
+print(
+    "原始音符:",
+    len(notes)
+)
 
-    table={}
+
+# ==========================
+# Pitch Filter
+# ==========================
+
+filtered = []
+
+for n in notes:
+
+    if (
+        LOW_PITCH
+        <=
+        n["pitch"]
+        <=
+        HIGH_PITCH
+    ):
+        filtered.append(n)
 
 
-    for n in notes:
+print(
+    "音域篩選:",
+    len(filtered)
+)
 
-        t=round(
-            float(n.offset),
-            2
+
+# ==========================
+# Duration Filter
+# ==========================
+
+filtered2 = []
+
+for n in filtered:
+
+    if n["duration"] >= MIN_DURATION:
+        filtered2.append(n)
+
+
+print(
+    "長度篩選:",
+    len(filtered2)
+)
+
+
+
+# ==========================
+# Melody Continuity Filter
+# ==========================
+
+melody = []
+
+
+for n in filtered2:
+
+    if not melody:
+        melody.append(n)
+        continue
+
+
+    last = melody[-1]
+
+
+    jump = abs(
+        n["pitch"]
+        -
+        last["pitch"]
+    )
+
+
+    # 太大跳音降低
+    if jump > MAX_JUMP:
+
+        continue
+
+
+    melody.append(n)
+
+
+
+print(
+    "旋律連續:",
+    len(melody)
+)
+
+
+
+# ==========================
+# Phrase Merge
+# ==========================
+
+merged = []
+
+
+for n in melody:
+
+    if not merged:
+
+        merged.append(n)
+        continue
+
+
+    last = merged[-1]
+
+
+    same_pitch = (
+        last["pitch"]
+        ==
+        n["pitch"]
+    )
+
+
+    end_time = (
+        last["offset"]
+        +
+        last["duration"]
+    )
+
+
+    close = (
+        n["offset"]
+        -
+        end_time
+        <
+        0.15
+    )
+
+
+    if same_pitch and close:
+
+        last["duration"] = (
+            n["offset"]
+            +
+            n["duration"]
+            -
+            last["offset"]
         )
-
-
-        if (
-            t not in table
-            or
-            n.pitch.midi >
-            table[t].pitch.midi
-        ):
-
-            table[t]=n
-
-
-
-    result=list(
-        table.values()
-    )
-
-
-    result.sort(
-        key=lambda x:x.offset
-    )
-
-
-    print(
-        "旋律:",
-        len(result)
-    )
-
-
-    return result
-
-
-
-# ----------------------------------------------------------
-# 建立 4/4
-# ----------------------------------------------------------
-
-def build_score(notes):
-
-
-    score=stream.Score()
-
-    part=stream.Part()
-
-
-    part.append(
-        meter.TimeSignature("4/4")
-    )
-
-
-    part.append(
-        tempo.MetronomeMark(
-            number=80
-        )
-    )
-
-
-    measure=stream.Measure(
-        number=1
-    )
-
-
-    beat=0
-
-
-
-    for n in notes:
-
-
-        q=quantize_length(
-            float(
-                n.duration.quarterLength
-            )
-        )
-
-
-        n2=copy.deepcopy(n)
-
-        n2.duration=duration.Duration(
-            q
-        )
-
-
-        if beat+q > 4:
-
-
-            rest_time=4-beat
-
-
-            if rest_time>0:
-
-                measure.append(
-                    safe_rest(rest_time)
-                )
-
-
-            part.append(
-                measure
-            )
-
-
-            measure=stream.Measure(
-                number=
-                measure.number+1
-            )
-
-
-            beat=0
-
-
-
-        measure.append(
-            n2
-        )
-
-
-        beat+=q
-
-
-
-    if beat < 4:
-
-        measure.append(
-            safe_rest(
-                4-beat
-            )
-        )
-
-
-    part.append(
-        measure
-    )
-
-
-    score.append(
-        part
-    )
-
-
-    return score
-
-
-
-# ----------------------------------------------------------
-# MAIN
-# ----------------------------------------------------------
-
-if __name__=="__main__":
-
-
-    midi=sys.argv[1]
-
-    output=sys.argv[2]
-
-
-    print(
-        "讀取 MIDI..."
-    )
-
-
-    score=converter.parse(
-        midi
-    )
-
-
-    print(
-        "Tracks:",
-        len(score.parts)
-    )
-
-
-
-    vocal=find_vocal(score)
-
-
-
-    if vocal:
-
-        print(
-            "模式: Vocal MIDI"
-        )
-
-        notes=collect_notes(
-            vocal
-        )
-
 
     else:
 
-        print(
-            "模式: Melody Extraction"
-        )
-
-
-        part=score.parts[0]
-
-
-        notes=collect_notes(
-            part
-        )
-
-
-        notes=melody_filter(
-            notes
-        )
+        merged.append(n)
 
 
 
-    print(
-        "建立 MusicXML..."
+print(
+    "Phrase Merge:",
+    len(merged)
+)
+
+
+
+# ==========================
+# Build MusicXML
+# ==========================
+
+print(
+    "建立 MusicXML..."
+)
+
+
+score = stream.Score()
+
+
+part = stream.Part()
+
+
+inst = instrument.Instrument()
+
+inst.instrumentName = (
+    "Vocal Melody"
+)
+
+part.insert(
+    0,
+    inst
+)
+
+
+part.append(
+    meter.TimeSignature("4/4")
+)
+
+
+part.insert(
+    0,
+    tempo.MetronomeMark(
+        number=80
+    )
+)
+
+
+
+for n in merged:
+
+    nn = note.Note(
+        n["pitch"]
+    )
+
+    nn.offset = n["offset"]
+
+    nn.duration.quarterLength = (
+        n["duration"]
+    )
+
+    part.insert(
+        nn.offset,
+        nn
     )
 
 
-    result=build_score(
-        notes
-    )
+score.append(part)
 
 
-    result.write(
-        "musicxml",
-        fp=output
-    )
+
+score.write(
+    "musicxml",
+    fp=output_xml
+)
 
 
-    print(
-        "完成:",
-        output
-    )
+print(
+    "完成:",
+    output_xml
+)
