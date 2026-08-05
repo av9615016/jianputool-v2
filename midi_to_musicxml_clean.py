@@ -1,19 +1,27 @@
 # midi_to_musicxml_clean.py
 #
-# JianpuTool V33
+# JianpuTool V33.1
 #
 # Vocal AI Melody Filter
+# + Quantize Builder
 #
 # BasicPitch Vocal MIDI
 #        |
 #        v
-# Vocal AI Filter
+# Vocal Filter
+#        |
+#        v
+# Quantize
+#        |
+#        v
+# 4/4 Measure Builder
 #        |
 #        v
 # MusicXML
-#
+
 
 import sys
+
 from music21 import converter
 from music21 import stream
 from music21 import note
@@ -22,26 +30,42 @@ from music21 import tempo
 from music21 import instrument
 
 
-# ==========================
-# V33 Filter Parameters
-# ==========================
+# =========================
+# Parameters
+# =========================
 
-LOW_PITCH = 48       # C3
-HIGH_PITCH = 84      # C6
+LOW_PITCH = 48
+HIGH_PITCH = 84
 
 MIN_DURATION = 0.12
 
-MAX_JUMP = 12        # 最大跳音
+MAX_JUMP = 12
 
 
-# ==========================
+# =========================
+# Quantize
+# =========================
+
+def quantize(value):
+
+    grid = 0.25
+
+    return round(
+        value / grid
+    ) * grid
+
+
+
+# =========================
 # Arguments
-# ==========================
+# =========================
 
 if len(sys.argv) < 3:
+
     print(
         "python midi_to_musicxml_clean.py input.mid output.musicxml"
     )
+
     exit()
 
 
@@ -49,18 +73,22 @@ input_mid = sys.argv[1]
 output_xml = sys.argv[2]
 
 
-# ==========================
+
+# =========================
 # Read MIDI
-# ==========================
+# =========================
 
 print("讀取 MIDI...")
+
 
 midi = converter.parse(
     input_mid
 )
 
 
-notes = []
+
+raw = []
+
 
 for n in midi.flatten().notes:
 
@@ -68,83 +96,96 @@ for n in midi.flatten().notes:
         continue
 
 
-    pitch = n.pitch.midi
-
-    duration = float(
-        n.duration.quarterLength
-    )
-
-
-    notes.append(
+    raw.append(
         {
-            "pitch": pitch,
+            "pitch": n.pitch.midi,
             "offset": float(n.offset),
-            "duration": duration
+            "duration": float(
+                n.duration.quarterLength
+            )
         }
     )
 
 
 print(
     "原始音符:",
-    len(notes)
+    len(raw)
 )
 
 
-# ==========================
+
+# =========================
 # Pitch Filter
-# ==========================
+# =========================
 
-filtered = []
+notes = []
 
-for n in notes:
+
+for n in raw:
 
     if (
         LOW_PITCH
-        <=
-        n["pitch"]
-        <=
-        HIGH_PITCH
+        <= n["pitch"]
+        <= HIGH_PITCH
     ):
-        filtered.append(n)
+
+        notes.append(n)
 
 
 print(
     "音域篩選:",
-    len(filtered)
+    len(notes)
 )
 
 
-# ==========================
+
+# =========================
 # Duration Filter
-# ==========================
+# =========================
 
-filtered2 = []
+notes2 = []
 
-for n in filtered:
+
+for n in notes:
 
     if n["duration"] >= MIN_DURATION:
-        filtered2.append(n)
+
+        notes2.append(n)
 
 
 print(
     "長度篩選:",
-    len(filtered2)
+    len(notes2)
 )
 
 
 
-# ==========================
-# Melody Continuity Filter
-# ==========================
+# =========================
+# Sort
+# =========================
+
+notes2.sort(
+    key=lambda x:x["offset"]
+)
+
+
+
+# =========================
+# Melody Continuity
+# =========================
 
 melody = []
 
 
-for n in filtered2:
+for n in notes2:
+
 
     if not melody:
+
         melody.append(n)
+
         continue
+
 
 
     last = melody[-1]
@@ -157,13 +198,9 @@ for n in filtered2:
     )
 
 
-    # 太大跳音降低
-    if jump > MAX_JUMP:
+    if jump <= MAX_JUMP:
 
-        continue
-
-
-    melody.append(n)
+        melody.append(n)
 
 
 
@@ -174,56 +211,55 @@ print(
 
 
 
-# ==========================
+# =========================
 # Phrase Merge
-# ==========================
+# =========================
 
 merged = []
 
 
 for n in melody:
 
+
+    n["duration"] = quantize(
+        n["duration"]
+    )
+
+
     if not merged:
 
         merged.append(n)
+
         continue
+
 
 
     last = merged[-1]
 
 
-    same_pitch = (
+    same = (
         last["pitch"]
         ==
         n["pitch"]
     )
 
 
-    end_time = (
-        last["offset"]
-        +
-        last["duration"]
-    )
-
-
-    close = (
+    distance = (
         n["offset"]
         -
-        end_time
-        <
-        0.15
+        (
+            last["offset"]
+            +
+            last["duration"]
+        )
     )
 
 
-    if same_pitch and close:
+    if same and distance <= 0.25:
 
-        last["duration"] = (
-            n["offset"]
-            +
-            n["duration"]
-            -
-            last["offset"]
-        )
+
+        last["duration"] += n["duration"]
+
 
     else:
 
@@ -238,9 +274,9 @@ print(
 
 
 
-# ==========================
-# Build MusicXML
-# ==========================
+# =========================
+# Build Score
+# =========================
 
 print(
     "建立 MusicXML..."
@@ -253,15 +289,11 @@ score = stream.Score()
 part = stream.Part()
 
 
-inst = instrument.Instrument()
-
-inst.instrumentName = (
-    "Vocal Melody"
-)
-
 part.insert(
     0,
-    inst
+    instrument.Instrument(
+        "Vocal Melody"
+    )
 )
 
 
@@ -279,32 +311,59 @@ part.insert(
 
 
 
+current = 0
+
+
+
 for n in merged:
+
+
+    dur = n["duration"]
+
+
+    if dur <= 0:
+
+        continue
+
+
 
     nn = note.Note(
         n["pitch"]
     )
 
-    nn.offset = n["offset"]
 
-    nn.duration.quarterLength = (
-        n["duration"]
-    )
+    nn.duration.quarterLength = dur
+
 
     part.insert(
-        nn.offset,
+        current,
         nn
     )
 
 
+    current += dur
+
+
+
+# =========================
+# Fill 4/4 Measures
+# =========================
+
 score.append(part)
 
+
+# make measures
+
+score = score.makeMeasures(
+    inPlace=False
+)
 
 
 score.write(
     "musicxml",
     fp=output_xml
 )
+
 
 
 print(
