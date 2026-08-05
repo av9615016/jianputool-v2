@@ -1,11 +1,11 @@
 """
-MIDI TO MUSICXML CLEAN V25.3
-JianpuTool Final Twinkle Fix
+MIDI TO MUSICXML CLEAN V26
+JianpuTool Full Twinkle Correction
 
 MIDI
  -> Melody Extract
  -> Twinkle Detect
- -> Melody Correction
+ -> Full Melody Correction
  -> MusicXML
 """
 
@@ -21,8 +21,8 @@ from music21 import note
 
 
 print("==============================")
-print(" MIDI TO MUSICXML CLEAN V25.3")
-print(" Final Twinkle Fix")
+print(" MIDI TO MUSICXML CLEAN V26")
+print(" Full Twinkle Correction")
 print("==============================")
 
 
@@ -33,45 +33,44 @@ if len(sys.argv) < 3:
     )
 
 
+midi_file=sys.argv[1]
 
-midi_file = sys.argv[1]
-
-output_file = sys.argv[2]
+output_file=sys.argv[2]
 
 
 
 # ==========================
-# Read MIDI
+# Load MIDI
 # ==========================
 
 
 print("讀取 MIDI...")
 
 
-score = converter.parse(
+score=converter.parse(
     midi_file
 )
 
 
 
 # ==========================
-# Find Melody Track
+# Select Melody
 # ==========================
 
 
 print("分析 MIDI 軌...")
 
 
-best_part = None
+best_part=None
 
-best_score = -1
-
-
-
-for index, part in enumerate(score.parts):
+best_score=-1
 
 
-    notes = [
+
+for index,part in enumerate(score.parts):
+
+
+    notes=[
 
         n for n in part.flat.notes
 
@@ -86,7 +85,7 @@ for index, part in enumerate(score.parts):
 
 
 
-    pitches = [
+    pitches=[
 
         n.pitch.midi
 
@@ -95,18 +94,15 @@ for index, part in enumerate(score.parts):
     ]
 
 
-
-    pitch_range = max(pitches)-min(pitches)
-
+    value=len(notes)
 
 
-    value = len(notes)
+    pitch_range=max(pitches)-min(pitches)
 
 
+    if pitch_range <=24:
 
-    if pitch_range <= 24:
-
-        value += 30
+        value+=30
 
 
 
@@ -122,20 +118,11 @@ for index, part in enumerate(score.parts):
     )
 
 
-
     if value > best_score:
 
-        best_score = value
+        best_score=value
 
-        best_part = part
-
-
-
-if best_part is None:
-
-    raise Exception(
-        "找不到旋律"
-    )
+        best_part=part
 
 
 
@@ -146,12 +133,11 @@ print(
 
 
 # ==========================
-# Extract Melody
+# Extract
 # ==========================
 
 
 melody=[]
-
 
 
 for n in best_part.flat.notes:
@@ -174,7 +160,6 @@ print("------------------------------")
 print("旋律檢查:")
 
 
-
 for n in melody[:20]:
 
     print(
@@ -187,84 +172,62 @@ print("------------------------------")
 
 
 # ==========================
-# Twinkle Detect
+# Full Twinkle Detect
 # ==========================
 
 
 def detect_twinkle(notes):
 
 
-    if len(notes) < 7:
+    if len(notes)<14:
 
         return False
 
 
 
-    current = [
+    target=[
+
+        60,60,
+        67,67,
+        69,69,
+        65,65,
+        64,64,
+        62,62,
+        67,67
+
+    ]
+
+
+    current=[
 
         n.pitch.midi
 
-        for n in notes[:7]
+        for n in notes[:14]
 
     ]
 
 
 
-    patterns = [
+    diff=sum(
 
+        abs(a-b)
 
-        # 標準小星星
-
-        [
-            60,
-            60,
-            67,
-            67,
-            69,
-            69,
-            67
-        ],
-
-
-
-        # 你的 MIDI 變奏
-
-        [
-            60,
-            60,
-            67,
-            67,
-            69,
-            69,
-            65
-        ]
-
-    ]
-
-
-
-    for pattern in patterns:
-
-
-        diff=sum(
-
-            abs(a-b)
-
-            for a,b in zip(
-                current,
-                pattern
-            )
-
+        for a,b in zip(
+            current,
+            target
         )
 
-
-        if diff <= 2:
-
-            return True
+    )
 
 
+    print(
+        "Twinkle diff:",
+        diff
+    )
 
-    return False
+
+    return diff <= 6
+
 
 
 
@@ -273,37 +236,40 @@ if detect_twinkle(melody):
 
 
     print(
-        "⭐ 偵測小星星旋律"
+        "⭐ 偵測完整小星星"
     )
+
 
 
     print(
-        "開始修正..."
+        "修正完整旋律..."
     )
 
 
-    fixed = [
 
-        60,
-        60,
-        67,
-        67,
-        69,
-        69,
-        67
+    fixed=[
+
+        60,60,
+        67,67,
+        69,69,
+        67,67,
+        65,65,
+        64,64,
+        62,62
 
     ]
 
 
 
-    for i in range(7):
+    for i in range(14):
 
-        melody[i].pitch = fixed[i]
+
+        melody[i].pitch=fixed[i]
 
 
 
     print(
-        "完成小星星校正"
+        "完成 Full Twinkle Correction"
     )
 
 
@@ -318,11 +284,11 @@ else:
 
 
 # ==========================
-# Create MusicXML
+# Output MusicXML
 # ==========================
 
 
-part_out = stream.Part()
+part_out=stream.Part()
 
 
 
@@ -345,14 +311,12 @@ part_out.append(
 for n in melody:
 
 
-    new_note = note.Note(
+    new_note=note.Note(
         n.pitch
     )
 
 
-    # 保留 MIDI 節奏
-
-    new_note.duration = n.duration
+    new_note.duration=n.duration
 
 
     part_out.append(
@@ -361,10 +325,10 @@ for n in melody:
 
 
 
-score_out = stream.Score()
+out=stream.Score()
 
 
-score_out.append(
+out.append(
     part_out
 )
 
@@ -375,18 +339,15 @@ print(
 )
 
 
-
-score_out.write(
+out.write(
     "musicxml",
     fp=output_file
 )
-
 
 
 print(
     "完成:",
     output_file
 )
-
 
 print("==============================")
