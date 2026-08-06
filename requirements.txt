@@ -5,6 +5,8 @@ music21==9.1.0
 
 demucs==4.0.1
 
+torchcodec
+
 numpy==1.26.4
 librosa==0.10.2.post1
 soundfile==0.12.1
