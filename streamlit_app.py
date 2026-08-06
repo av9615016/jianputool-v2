@@ -526,7 +526,9 @@ if uploaded:
     st.subheader(
         "📄 9. LilyPond PDF"
     )
-
+    check_lilypond_braces(
+    ly_file
+    )
 
     run([
 
