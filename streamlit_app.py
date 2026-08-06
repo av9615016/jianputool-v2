@@ -2,8 +2,10 @@ import streamlit as st
 import os
 import uuid
 import subprocess
-import sys
+import glob
 import traceback
+import sys
+
 
 
 # ==========================
@@ -11,80 +13,62 @@ import traceback
 # ==========================
 
 st.set_page_config(
-    page_title="JianpuTool MVP 1.2.6",
+    page_title="JianpuTool AI Vocal MVP 1.3",
     page_icon="🎵"
 )
 
 
 st.title(
-    "🎵 JianpuTool MVP 1.2.6"
+    "🎵 JianpuTool AI Vocal MVP 1.3"
 )
 
 
 st.write(
 """
-MP3 / WAV / MIDI → MIDI → MusicXML → 簡譜 PDF
+MP3 / WAV → AI Vocal → MIDI → MusicXML → 簡譜 PDF
 
 Pipeline:
 
-Audio
+🎤 Demucs Vocal Separation
 ↓
-BasicPitch
+🎼 BasicPitch
 ↓
-MIDI
+🎹 Vocal MIDI Clean
 ↓
-MusicXML Clean
+🎼 MusicXML
 ↓
-Jianpu Fix
+🧹 Clean
 ↓
-Final Quantize
+🎵 Jianpu Fix
 ↓
-Check Measure
+⏱ Quantize
 ↓
-jianpu-ly
+🔍 Measure Check
 ↓
-LilyPond
+🎹 jianpu-ly
 ↓
-PDF
+📄 LilyPond PDF
 """
 )
 
 
 
 # ==========================
-# Path
+# Command
 # ==========================
 
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
+def run(cmd):
 
-
-OUTPUT_DIR = os.path.join(
-    BASE_DIR,
-    "outputs"
-)
-
-
-os.makedirs(
-    OUTPUT_DIR,
-    exist_ok=True
-)
-
-
-
-# ==========================
-# Run Command
-# ==========================
-
-def run_command(cmd):
+    st.write(
+        "執行:"
+    )
 
     st.code(
         " ".join(cmd)
     )
 
 
-    result = subprocess.run(
+    result=subprocess.run(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -97,7 +81,7 @@ def run_command(cmd):
     )
 
 
-    if result.returncode != 0:
+    if result.returncode !=0:
 
         raise Exception(
             result.stdout
@@ -109,39 +93,38 @@ def run_command(cmd):
 # Upload
 # ==========================
 
-uploaded = st.file_uploader(
-    "上傳 MP3 / WAV / MIDI",
+
+upload=st.file_uploader(
+    "上傳 MP3 / WAV",
     type=[
         "mp3",
-        "wav",
-        "mid",
-        "midi"
+        "wav"
     ]
 )
 
 
 
-if uploaded:
+if upload:
 
 
-    job_id = str(uuid.uuid4())[:8]
+    job=str(uuid.uuid4())[:8]
 
 
-    workdir = os.path.join(
-        OUTPUT_DIR,
-        job_id
+    work=os.path.join(
+        "outputs",
+        job
     )
 
 
     os.makedirs(
-        workdir,
+        work,
         exist_ok=True
     )
 
 
-    input_file = os.path.join(
-        workdir,
-        uploaded.name
+    input_file=os.path.join(
+        work,
+        "input.mp3"
     )
 
 
@@ -151,22 +134,18 @@ if uploaded:
     ) as f:
 
         f.write(
-            uploaded.getbuffer()
+            upload.read()
         )
 
 
     st.success(
-        f"上傳完成: {uploaded.name}"
+        f"上傳完成: {upload.name}"
     )
 
 
     st.info(
-        f"工作目錄: {workdir}"
+        f"工作目錄: {work}"
     )
-
-
-
-    ext = uploaded.name.lower().split(".")[-1]
 
 
 
@@ -174,86 +153,145 @@ if uploaded:
 
 
         # ==========================
-        # Audio → MIDI
+        # Demucs
         # ==========================
 
-        if ext in [
-            "mid",
-            "midi"
-        ]:
+
+        st.write(
+            "🎤 Demucs 分離人聲"
+        )
 
 
-            midi_file = input_file
+        run(
+            [
+                sys.executable,
+                "-m",
+                "demucs",
+                "-n",
+                "htdemucs",
+                input_file
+            ]
+        )
 
 
-            st.info(
-                "使用 MIDI 輸入"
+
+        vocals=glob.glob(
+            "separated/**/vocals.wav",
+            recursive=True
+        )
+
+
+        if not vocals:
+
+            raise Exception(
+                "找不到 vocals.wav"
             )
 
 
-        else:
+        vocal_file=vocals[-1]
 
 
-            st.info(
-                "🎧 BasicPitch Audio → MIDI"
-            )
+        st.success(
+            f"找到人聲: {vocal_file}"
+        )
+ # ==========================
+        # BasicPitch Vocal MIDI
+        # ==========================
 
 
-            midi_file = os.path.join(
-                workdir,
-                "audio.mid"
-            )
+        st.write(
+            "🎼 BasicPitch 抓 Vocal MIDI"
+        )
 
 
-            cmd = [
+        vocal_mid=os.path.join(
+            work,
+            "vocal.mid"
+        )
+
+
+        run(
+            [
                 sys.executable,
                 "basicpitch_convert.py",
-                input_file,
-                midi_file
+                vocal_file,
+                vocal_mid
             ]
+        )
 
 
-            run_command(
-                cmd
+        if not os.path.exists(
+            vocal_mid
+        ):
+
+            raise Exception(
+                "Vocal MIDI 產生失敗"
             )
+
+
+
+        # ==========================
+        # Vocal MIDI Clean
+        # ==========================
+
+
+        st.write(
+            "🎹 Vocal MIDI Clean"
+        )
+
+
+        clean_mid=os.path.join(
+            work,
+            "vocal_clean.mid"
+        )
+
+
+        run(
+            [
+                sys.executable,
+                "vocal_midi_clean.py",
+                vocal_mid,
+                clean_mid
+            ]
+        )
 
 
 
         if not os.path.exists(
-            midi_file
+            clean_mid
         ):
 
             raise Exception(
-                "MIDI 產生失敗"
+                "MIDI Clean 失敗"
             )
 
 
-        st.success(
-            "MIDI 完成"
-        )
- # ==========================
+
+        # ==========================
         # MIDI → MusicXML
         # ==========================
 
-        st.info(
+
+        st.write(
             "🎼 MIDI → MusicXML"
         )
 
 
-        raw_xml = os.path.join(
-            workdir,
+        raw_xml=os.path.join(
+            work,
             "raw.musicxml"
         )
 
 
-        run_command(
+        run(
             [
                 sys.executable,
                 "midi_to_musicxml_clean.py",
-                midi_file,
+                clean_mid,
                 raw_xml
             ]
         )
+
 
 
         if not os.path.exists(
@@ -261,13 +299,8 @@ if uploaded:
         ):
 
             raise Exception(
-                "raw MusicXML 產生失敗"
+                "MusicXML 產生失敗"
             )
-
-
-        st.success(
-            "raw MusicXML 完成"
-        )
 
 
 
@@ -275,18 +308,19 @@ if uploaded:
         # Clean MusicXML
         # ==========================
 
-        st.info(
+
+        st.write(
             "🧹 Clean MusicXML"
         )
 
 
-        clean_xml = os.path.join(
-            workdir,
+        clean_xml=os.path.join(
+            work,
             "clean.musicxml"
         )
 
 
-        run_command(
+        run(
             [
                 sys.executable,
                 "clean_musicxml.py",
@@ -296,32 +330,24 @@ if uploaded:
         )
 
 
-        if not os.path.exists(
-            clean_xml
-        ):
-
-            raise Exception(
-                "clean MusicXML 失敗"
-            )
-
-
 
         # ==========================
         # Jianpu Fix
         # ==========================
 
-        st.info(
-            "🎵 Jianpu Fix MusicXML"
+
+        st.write(
+            "🎵 Jianpu Fix"
         )
 
 
-        fixed_xml = os.path.join(
-            workdir,
+        fixed_xml=os.path.join(
+            work,
             "fixed.musicxml"
         )
 
 
-        run_command(
+        run(
             [
                 sys.executable,
                 "jianpu_fix_musicxml.py",
@@ -331,32 +357,24 @@ if uploaded:
         )
 
 
-        if not os.path.exists(
-            fixed_xml
-        ):
-
-            raise Exception(
-                "fixed MusicXML 失敗"
-            )
-
-
 
         # ==========================
         # Final Quantize
         # ==========================
 
-        st.info(
+
+        st.write(
             "⏱ Final Quantize"
         )
 
 
-        final_xml = os.path.join(
-            workdir,
+        final_xml=os.path.join(
+            work,
             "final.musicxml"
         )
 
 
-        run_command(
+        run(
             [
                 sys.executable,
                 "final_quantize.py",
@@ -366,12 +384,13 @@ if uploaded:
         )
 
 
+
         if not os.path.exists(
             final_xml
         ):
 
             raise Exception(
-                "final MusicXML 失敗"
+                "final.musicxml 不存在"
             )
 
 
@@ -380,12 +399,13 @@ if uploaded:
         # Check Measure
         # ==========================
 
-        st.info(
-            "🔍 檢查小節拍數"
+
+        st.write(
+            "🔍 檢查 4/4 小節"
         )
 
 
-        run_command(
+        run(
             [
                 sys.executable,
                 "check_measure.py",
@@ -395,18 +415,19 @@ if uploaded:
 
 
         st.success(
-            "✅ 小節檢查完成"
+            "✅ 小節檢查通過"
         )
- # ==========================
+  # ==========================
         # MusicXML → jianpu.ly
         # ==========================
 
-        st.info(
+
+        st.write(
             "🎵 MusicXML → jianpu.ly"
         )
 
 
-        run_command(
+        run(
             [
                 sys.executable,
                 "-m",
@@ -417,91 +438,101 @@ if uploaded:
 
 
 
+        # ==========================
         # 找 ly
-
-        ly_file = None
-
-
-        for f in os.listdir(workdir):
-
-            if f.endswith(".ly"):
-
-                ly_file = os.path.join(
-                    workdir,
-                    f
-                )
-
-                break
+        # ==========================
 
 
+        ly_files=[]
 
-        if ly_file is None:
+
+        for root,dirs,files in os.walk("."):
+
+            for file in files:
+
+                if file.endswith(".ly"):
+
+                    ly_files.append(
+                        os.path.join(
+                            root,
+                            file
+                        )
+                    )
+
+
+
+        if not ly_files:
 
             raise Exception(
                 "找不到 jianpu.ly"
             )
 
 
+        ly_file=ly_files[-1]
+
+
         st.success(
-            "jianpu.ly 完成"
+            f"找到 LilyPond: {ly_file}"
         )
 
 
 
         # ==========================
-        # LilyPond PDF
+        # LilyPond
         # ==========================
 
-        st.info(
-            "📄 LilyPond PDF"
+
+        st.write(
+            "📄 LilyPond 產生 PDF"
         )
 
 
-        pdf_output = os.path.join(
-            workdir,
-            "jianpu"
-        )
-
-
-        run_command(
+        run(
             [
                 "lilypond",
                 "-o",
-                pdf_output,
+                os.path.join(
+                    work,
+                    "jianpu"
+                ),
                 ly_file
             ]
         )
 
 
-        pdf_file = os.path.join(
-            workdir,
-            "jianpu.pdf"
+
+        pdf_files=glob.glob(
+            "*.pdf"
         )
 
 
+        pdf_files+=glob.glob(
+            os.path.join(
+                work,
+                "*.pdf"
+            )
+        )
 
-        if not os.path.exists(
-            pdf_file
-        ):
+
+        if not pdf_files:
 
             raise Exception(
-                "PDF 產生失敗"
+                "找不到 PDF"
             )
+
+
+        pdf=pdf_files[-1]
 
 
 
         st.success(
-            "🎉 簡譜 PDF 完成!"
+            "🎉 簡譜 PDF 完成"
         )
 
 
 
-        # ==========================
-        # Download
-        # ==========================
-
         with open(
-            pdf_file,
+            pdf,
             "rb"
         ) as f:
 
@@ -514,15 +545,12 @@ if uploaded:
             )
 
 
-        st.balloons()
-
-
 
     except Exception as e:
 
 
         st.error(
-            "❌ 轉換錯誤"
+            "❌ 轉換失敗"
         )
 
 
