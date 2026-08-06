@@ -2,30 +2,30 @@ import streamlit as st
 import os
 import uuid
 
-
 from vocal_separator import separate_vocal
+from pdf_generator import generate_pdf
+
+
+st.set_page_config(
+    page_title="JianpuTool Professional MVP 2.4",
+    page_icon="🎵"
+)
 
 
 st.title(
-"🎵 JianpuTool Professional MVP 2.3"
+    "🎵 JianpuTool Professional MVP 2.4"
 )
 
 
-file=st.file_uploader(
-"上傳 MP3/WAV",
-[
-"mp3",
-"wav"
-]
+file = st.file_uploader(
+    "上傳 MP3/WAV",
+    ["mp3","wav"]
 )
-
 
 
 if file:
 
-
     job=str(uuid.uuid4())
-
 
     os.makedirs(
         job,
@@ -33,47 +33,46 @@ if file:
     )
 
 
-    audio=f"{job}/input.wav"
+    input_file=f"{job}/input.wav"
 
 
-    open(
-        audio,
-        "wb"
-    ).write(
-        file.read()
-    )
+    with open(input_file,"wb") as f:
+        f.write(file.read())
 
 
     st.success(
-    "歌曲完成"
+        "歌曲完成"
     )
 
 
     if st.button(
-    "開始製作簡譜"
+        "開始製作簡譜"
     ):
 
 
         st.write(
-        "🎤 人聲分離"
+            "🎤 人聲分離"
         )
 
 
         vocal=separate_vocal(
-            audio,
+            input_file,
             job
         )
 
-        if isinstance(vocal, dict):
 
-           st.code(
-             vocal["error"],
-             language="text"
-           )
+        if isinstance(vocal,dict):
 
-           st.stop()
+            st.error(
+                vocal["error"]
+            )
+
+            st.stop()
+
+
+
         st.write(
-        "🎵 AI抓旋律"
+            "🎵 AI抓旋律"
         )
 
 
@@ -86,8 +85,9 @@ if file:
         )
 
 
+
         st.write(
-        "📄 產生MusicXML"
+            "📄 MusicXML"
         )
 
 
@@ -100,6 +100,27 @@ if file:
         )
 
 
-        st.success(
-        "完成"
+        st.write(
+            "📕產生PDF"
         )
+
+
+        pdf=generate_pdf(
+            f"{job}/score.musicxml",
+            job
+        )
+
+
+        st.success(
+            "完成"
+        )
+
+
+        with open(pdf,"rb") as f:
+
+            st.download_button(
+                "📕下載簡譜PDF",
+                f,
+                file_name="jianpu.pdf",
+                mime="application/pdf"
+            )
