@@ -387,9 +387,9 @@ if upload:
             PYTHON,
             "-m",
             "jianpu_ly",
-            str(final_xml)
+            "final.musicxml"
         ],
-        cwd=ly_dir
+        cwd=str(job_dir)
     )
 
 
@@ -402,13 +402,10 @@ if upload:
 
     search_list = [
 
-        ly_dir / "backup.ly",
-
-        ly_dir / "final.ly",
-
-        ly_dir / "final.musicxml.ly",
-
-        ly_dir / "jianpu.ly"
+          job_dir / "final.ly",
+          job_dir / "backup.ly",
+          job_dir / "final.musicxml.ly",
+          job_dir / "jianpu.ly"
 
     ]
 
