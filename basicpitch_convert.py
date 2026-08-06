@@ -1,3 +1,4 @@
+print("NEW BASIC PITCH FILE")
 import sys
 import os
 import traceback
