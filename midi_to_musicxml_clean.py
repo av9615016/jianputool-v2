@@ -5,9 +5,12 @@
 #
 # Vocal MIDI -> MusicXML
 #
-# V41 PRO
+# Fix:
+#   Duration Type Error
+#   Measure Overflow
 #
 # ============================================================
+
 
 import sys
 import music21
@@ -52,10 +55,12 @@ def extract_melody(score):
                 notes.append(n)
 
 
+
             elif isinstance(
                 n,
                 music21.chord.Chord
             ):
+
 
                 # chord 取最高音
 
@@ -69,9 +74,10 @@ def extract_melody(score):
                     p
                 )
 
-                nn.duration=n.duration
 
-                nn.offset=n.offset
+                nn.duration = n.duration
+
+                nn.offset = n.offset
 
 
                 notes.append(nn)
@@ -94,10 +100,11 @@ def extract_melody(score):
 
 
 # ============================================================
-# Vocal preserve filter
+# Vocal Preserve
 # ============================================================
 
 def vocal_filter(notes):
+
 
     print(
         "Vocal Melody Preserve..."
@@ -107,8 +114,7 @@ def vocal_filter(notes):
     result=[]
 
 
-    last_pitch=None
-    last_offset=-999
+    last=None
 
 
 
@@ -134,32 +140,31 @@ def vocal_filter(notes):
 
 
 
-        # 去掉極短雜訊
+        # 移除極短雜訊
 
         if length < 0.05:
             continue
 
 
 
-        # 完全同時間同音
+        # 同音完全重疊
 
-        if (
-            pitch==last_pitch
-            and
-            abs(
-                n.offset-last_offset
-            )<0.01
-        ):
-            continue
+        if last:
+
+            if (
+                pitch==last.pitch.midi
+                and
+                abs(
+                    n.offset-last.offset
+                ) < 0.01
+            ):
+                continue
 
 
 
         result.append(n)
 
-
-        last_pitch=pitch
-
-        last_offset=n.offset
+        last=n
 
 
 
@@ -174,10 +179,37 @@ def vocal_filter(notes):
 
 
 # ============================================================
-# Build 4/4 score
+# Safe Duration
 # ============================================================
 
-def build_musicxml(notes):
+def safe_duration(note, length):
+
+
+    if length <= 0:
+
+        length=0.25
+
+
+
+    d=music21.duration.Duration(
+        length
+    )
+
+
+    # 強制建立 MusicXML type
+
+    d.linked=True
+
+
+    note.duration=d
+
+
+
+# ============================================================
+# Build 4/4
+# ============================================================
+
+def build_score(notes):
 
 
     print(
@@ -215,38 +247,34 @@ def build_musicxml(notes):
     )
 
 
-    beat_used=0.0
+    beat=0.0
 
 
 
     for n in notes:
 
 
-
         pitch=n.pitch
 
 
-        duration=float(
+        length=float(
             n.duration.quarterLength
         )
 
 
+        if length<=0:
 
-        if duration<=0:
-
-            duration=0.25
-
-
-
-        # 避免超長音
-
-        if duration>4:
-
-            duration=4
+            length=0.25
 
 
 
-        remain=duration
+        if length>4:
+
+            length=4
+
+
+
+        remain=length
 
 
 
@@ -254,8 +282,7 @@ def build_musicxml(notes):
 
 
 
-            space=4.0-beat_used
-
+            space=4.0-beat
 
 
             take=min(
@@ -264,27 +291,30 @@ def build_musicxml(notes):
             )
 
 
+
             new_note=music21.note.Note(
                 pitch
             )
 
 
-            new_note.duration.quarterLength=take
+
+            safe_duration(
+                new_note,
+                take
+            )
 
 
 
-            # 跨小節 tie
+            # 跨小節
 
             if take < remain:
-
 
                 new_note.tie=music21.tie.Tie(
                     "start"
                 )
 
 
-            elif remain < duration:
-
+            elif remain < length:
 
                 new_note.tie=music21.tie.Tie(
                     "stop"
@@ -297,15 +327,13 @@ def build_musicxml(notes):
             )
 
 
-            beat_used += take
+            beat += take
 
             remain -= take
 
 
 
-            # 滿4拍
-
-            if beat_used >= 4.0-0.001:
+            if beat >= 4.0-0.001:
 
 
                 measure.rightBarline=(
@@ -320,7 +348,7 @@ def build_musicxml(notes):
                 )
 
 
-                measure_no +=1
+                measure_no += 1
 
 
                 measure=music21.stream.Measure(
@@ -328,11 +356,9 @@ def build_musicxml(notes):
                 )
 
 
-                beat_used=0
+                beat=0.0
 
 
-
-    # 最後小節
 
     if len(measure.notes)>0:
 
@@ -359,13 +385,13 @@ def save(score,out):
 
 
     print(
-        "整理小節..."
+        "整理 MusicXML..."
     )
 
 
-    # 強制 4/4
+    # 修正 duration type
 
-    score.makeMeasures(
+    score.makeNotation(
         inPlace=True
     )
 
@@ -411,7 +437,9 @@ def main():
 
 
 
-    midi=load_midi(inp)
+    midi=load_midi(
+        inp
+    )
 
 
     notes=extract_melody(
@@ -424,7 +452,7 @@ def main():
     )
 
 
-    score=build_musicxml(
+    score=build_score(
         notes
     )
 
