@@ -1,18 +1,18 @@
-# ============================================================
-# midi_to_musicxml_clean.py
+# midi_to_musicxml_clean_v42.1_pro.py
 #
-# JianpuTool MVP 1.1
-#
+# JianpuTool
 # MIDI -> MusicXML
 #
-# FIX:
-# output argument is FILE, not directory
+# V42.1 PRO
+# Fix:
+#   - jianpu_ly KeyError 11.0
+#   - anacrusis crash
+#   - invalid measure length
+#   - force 4/4
 #
-# ============================================================
-
 
 import sys
-import os
+import copy
 
 from music21 import converter
 from music21 import stream
@@ -22,205 +22,305 @@ from music21 import meter
 from music21 import tempo
 
 
+# ==========================
+# Quantize
+# ==========================
 
-print("================ MIDI TO MUSICXML CLEAN ================")
+def quantize(v):
 
-
-
-# ------------------------------------------------------------
-# Arguments
-# ------------------------------------------------------------
-
-if len(sys.argv) < 3:
-
-    print(
-        "Usage:"
-    )
-
-    print(
-        "python midi_to_musicxml_clean.py input.mid output.musicxml"
-    )
-
-    sys.exit(1)
+    # 16th note grid
+    return round(v * 4) / 4
 
 
 
-midi_file = sys.argv[1]
-output_file = sys.argv[2]
+# ==========================
+# Force 4/4
+# ==========================
+
+def force_44(score):
+
+    ts = meter.TimeSignature("4/4")
+
+    for p in score.parts:
+
+        for m in p.getElementsByClass("Measure"):
+
+            m.timeSignature = copy.deepcopy(ts)
+
+    return score
 
 
 
-if not os.path.isfile(midi_file):
+# ==========================
+# Remove anacrusis
+# ==========================
 
-    raise Exception(
-        f"MIDI not found: {midi_file}"
-    )
+def remove_anacrusis(score):
 
+    for p in score.parts:
 
-
-# ------------------------------------------------------------
-# Output folder
-# ------------------------------------------------------------
-
-output_dir = os.path.dirname(
-    output_file
-)
-
-
-if output_dir:
-
-    os.makedirs(
-        output_dir,
-        exist_ok=True
-    )
-
-
-
-# ------------------------------------------------------------
-# Read MIDI
-# ------------------------------------------------------------
-
-print("讀取 MIDI...")
-
-
-score = converter.parse(
-    midi_file
-)
-
-
-
-# ------------------------------------------------------------
-# Find melody part
-# ------------------------------------------------------------
-
-print("取得 Piano Part...")
-
-
-parts = score.parts
-
-
-if len(parts) > 0:
-
-    part = parts[0]
-
-else:
-
-    part = score
-
-
-
-# ------------------------------------------------------------
-# Extract notes
-# ------------------------------------------------------------
-
-print("抽取旋律...")
-
-
-melody = stream.Part()
-
-
-melody.append(
-    meter.TimeSignature("4/4")
-)
-
-
-
-# tempo
-
-melody.append(
-    tempo.MetronomeMark(
-        number=84
-    )
-)
-
-
-
-for element in part.recurse():
-
-    if isinstance(
-        element,
-        note.Note
-    ):
-
-        n = note.Note(
-            element.pitch
+        measures = list(
+            p.getElementsByClass("Measure")
         )
 
-        n.duration = element.duration
+        for i, m in enumerate(measures):
 
-        melody.append(
-            n
-        )
+            if i == 0:
+
+                m.paddingLeft = 0
+
+                try:
+                    m.padAsAnacrusis = False
+                except:
+                    pass
 
 
-    elif isinstance(
-        element,
-        chord.Chord
-    ):
-
-        # 取最高音當旋律
-
-        n = note.Note(
-            element.sortAscending().notes[-1].pitch
-        )
-
-        n.duration = element.duration
-
-        melody.append(
-            n
-        )
+    return score
 
 
 
-# ------------------------------------------------------------
+# ==========================
+# Melody extraction
+# ==========================
+
+def extract_melody(midi):
+
+    notes = []
+
+
+    for part in midi.parts:
+
+        for n in part.recurse():
+
+            if isinstance(n, note.Note):
+
+                notes.append(n)
+
+            elif isinstance(n, chord.Chord):
+
+                # 最高音當旋律
+
+                notes.append(
+                    note.Note(
+                        max(n.pitches)
+                    )
+                )
+
+
+    return notes
+
+
+
+# ==========================
 # Build score
-# ------------------------------------------------------------
+# ==========================
 
-print("建立4/4小節...")
+def build_musicxml(notes):
 
+    score = stream.Score()
 
-out_score = stream.Score()
+    part = stream.Part()
 
+    part.insert(
+        0,
+        meter.TimeSignature("4/4")
+    )
 
-out_score.insert(
-    0,
-    melody
-)
-
-
-
-# ------------------------------------------------------------
-# Remove bad durations
-# ------------------------------------------------------------
-
-for n in melody.notes:
-
-    if n.duration.quarterLength <= 0:
-
-        n.duration.quarterLength = 1
+    part.insert(
+        0,
+        tempo.MetronomeMark(
+            number=80
+        )
+    )
 
 
+    measure = stream.Measure()
 
-# ------------------------------------------------------------
-# Export
-# ------------------------------------------------------------
+    measure.number = 1
 
-print("輸出 MusicXML...")
-
-
-out_score.write(
-    "musicxml",
-    fp=output_file
-)
+    beat = 0
 
 
+    for n in notes:
 
-print(
-    "完成:",
-    output_file
-)
+        ql = quantize(
+            n.duration.quarterLength
+        )
 
 
-print(
-    "========================================================"
-)
+        if beat + ql > 4:
+
+            # 補滿小節
+
+            rest = note.Rest()
+
+            rest.duration.quarterLength = (
+                4 - beat
+            )
+
+            if rest.duration.quarterLength > 0:
+
+                measure.append(rest)
+
+
+            part.append(measure)
+
+
+            measure = stream.Measure()
+
+            measure.number += 1
+
+            beat = 0
+
+
+        new_note = copy.deepcopy(n)
+
+        new_note.duration.quarterLength = ql
+
+        measure.append(new_note)
+
+        beat += ql
+
+
+
+    # 最後小節
+
+    if beat < 4:
+
+        r = note.Rest()
+
+        r.duration.quarterLength = 4 - beat
+
+        measure.append(r)
+
+
+    part.append(measure)
+
+    score.append(part)
+
+
+    return score
+
+
+
+# ==========================
+# Clean measure
+# ==========================
+
+def clean_measure(score):
+
+    for p in score.parts:
+
+        for m in p.getElementsByClass("Measure"):
+
+            length = m.duration.quarterLength
+
+
+            if length != 4:
+
+                diff = 4 - length
+
+
+                if diff > 0:
+
+                    r = note.Rest()
+
+                    r.duration.quarterLength = diff
+
+                    m.append(r)
+
+
+    return score
+
+
+
+# ==========================
+# Main
+# ==========================
+
+def main():
+
+    if len(sys.argv) < 3:
+
+        print(
+            "Usage:"
+        )
+
+        print(
+            "python midi_to_musicxml_clean_v42.1_pro.py input.mid output.musicxml"
+        )
+
+        sys.exit(1)
+
+
+    midi_file = sys.argv[1]
+
+    output = sys.argv[2]
+
+
+    print("讀取 MIDI...")
+
+    midi = converter.parse(
+        midi_file
+    )
+
+
+    print(
+        "抽取旋律..."
+    )
+
+    notes = extract_melody(
+        midi
+    )
+
+
+    print(
+        "旋律數:",
+        len(notes)
+    )
+
+
+    print(
+        "建立 MusicXML..."
+    )
+
+
+    score = build_musicxml(
+        notes
+    )
+
+
+    print(
+        "修正拍號..."
+    )
+
+
+    score = clean_measure(score)
+
+    score = remove_anacrusis(score)
+
+    score = force_44(score)
+
+
+
+    print(
+        "輸出 MusicXML..."
+    )
+
+
+    score.write(
+        "musicxml",
+        fp=output
+    )
+
+
+    print(
+        "完成:",
+        output
+    )
+
+
+
+if __name__ == "__main__":
+
+    main()
