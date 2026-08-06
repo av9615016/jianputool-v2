@@ -11,12 +11,14 @@ import traceback
 # ==========================
 
 st.set_page_config(
-    page_title="JianpuTool MVP 1.2.5",
+    page_title="JianpuTool MVP 1.2.6",
     page_icon="🎵"
 )
 
 
-st.title("🎵 JianpuTool MVP 1.2.5")
+st.title(
+    "🎵 JianpuTool MVP 1.2.6"
+)
 
 
 st.write(
@@ -36,6 +38,8 @@ MusicXML Clean
 Jianpu Fix
 ↓
 Final Quantize
+↓
+Check Measure
 ↓
 jianpu-ly
 ↓
@@ -70,7 +74,7 @@ os.makedirs(
 
 
 # ==========================
-# Command
+# Run Command
 # ==========================
 
 def run_command(cmd):
@@ -161,7 +165,9 @@ if uploaded:
     )
 
 
+
     ext = uploaded.name.lower().split(".")[-1]
+
 
 
     try:
@@ -176,7 +182,13 @@ if uploaded:
             "midi"
         ]:
 
+
             midi_file = input_file
+
+
+            st.info(
+                "使用 MIDI 輸入"
+            )
 
 
         else:
@@ -212,19 +224,15 @@ if uploaded:
         ):
 
             raise Exception(
-                "MIDI 不存在"
+                "MIDI 產生失敗"
             )
-
 
 
         st.success(
             "MIDI 完成"
         )
-
-
-
-        # ==========================
-        # MIDI → raw MusicXML
+ # ==========================
+        # MIDI → MusicXML
         # ==========================
 
         st.info(
@@ -248,19 +256,33 @@ if uploaded:
         )
 
 
+        if not os.path.exists(
+            raw_xml
+        ):
+
+            raise Exception(
+                "raw MusicXML 產生失敗"
+            )
+
+
+        st.success(
+            "raw MusicXML 完成"
+        )
+
+
 
         # ==========================
-        # Clean
+        # Clean MusicXML
         # ==========================
+
+        st.info(
+            "🧹 Clean MusicXML"
+        )
+
 
         clean_xml = os.path.join(
             workdir,
             "clean.musicxml"
-        )
-
-
-        st.info(
-            "🧹 clean_musicxml"
         )
 
 
@@ -274,19 +296,28 @@ if uploaded:
         )
 
 
+        if not os.path.exists(
+            clean_xml
+        ):
+
+            raise Exception(
+                "clean MusicXML 失敗"
+            )
+
+
 
         # ==========================
         # Jianpu Fix
         # ==========================
 
-        fixed_xml = os.path.join(
-            workdir,
-            "fixed.musicxml"
+        st.info(
+            "🎵 Jianpu Fix MusicXML"
         )
 
 
-        st.info(
-            "🎵 jianpu_fix_musicxml"
+        fixed_xml = os.path.join(
+            workdir,
+            "fixed.musicxml"
         )
 
 
@@ -300,19 +331,28 @@ if uploaded:
         )
 
 
+        if not os.path.exists(
+            fixed_xml
+        ):
+
+            raise Exception(
+                "fixed MusicXML 失敗"
+            )
+
+
 
         # ==========================
         # Final Quantize
         # ==========================
 
-        final_xml = os.path.join(
-            workdir,
-            "final.musicxml"
+        st.info(
+            "⏱ Final Quantize"
         )
 
 
-        st.info(
-            "⏱ Final Quantize"
+        final_xml = os.path.join(
+            workdir,
+            "final.musicxml"
         )
 
 
@@ -326,9 +366,39 @@ if uploaded:
         )
 
 
+        if not os.path.exists(
+            final_xml
+        ):
+
+            raise Exception(
+                "final MusicXML 失敗"
+            )
+
+
 
         # ==========================
-        # Jianpu LY
+        # Check Measure
+        # ==========================
+
+        st.info(
+            "🔍 檢查小節拍數"
+        )
+
+
+        run_command(
+            [
+                sys.executable,
+                "check_measure.py",
+                final_xml
+            ]
+        )
+
+
+        st.success(
+            "✅ 小節檢查完成"
+        )
+ # ==========================
+        # MusicXML → jianpu.ly
         # ==========================
 
         st.info(
@@ -346,6 +416,8 @@ if uploaded:
         )
 
 
+
+        # 找 ly
 
         ly_file = None
 
@@ -366,13 +438,18 @@ if uploaded:
         if ly_file is None:
 
             raise Exception(
-                "找不到 ly"
+                "找不到 jianpu.ly"
             )
+
+
+        st.success(
+            "jianpu.ly 完成"
+        )
 
 
 
         # ==========================
-        # LilyPond
+        # LilyPond PDF
         # ==========================
 
         st.info(
@@ -380,18 +457,20 @@ if uploaded:
         )
 
 
+        pdf_output = os.path.join(
+            workdir,
+            "jianpu"
+        )
+
+
         run_command(
             [
                 "lilypond",
                 "-o",
-                os.path.join(
-                    workdir,
-                    "jianpu"
-                ),
+                pdf_output,
                 ly_file
             ]
         )
-
 
 
         pdf_file = os.path.join(
@@ -406,16 +485,20 @@ if uploaded:
         ):
 
             raise Exception(
-                "PDF 失敗"
+                "PDF 產生失敗"
             )
 
 
 
         st.success(
-            "🎉 Jianpu PDF 完成!"
+            "🎉 簡譜 PDF 完成!"
         )
 
 
+
+        # ==========================
+        # Download
+        # ==========================
 
         with open(
             pdf_file,
@@ -424,8 +507,8 @@ if uploaded:
 
 
             st.download_button(
-                "⬇️ 下載簡譜 PDF",
-                f,
+                label="⬇️ 下載簡譜 PDF",
+                data=f,
                 file_name="jianpu.pdf",
                 mime="application/pdf"
             )
@@ -444,7 +527,8 @@ if uploaded:
 
 
         st.exception(
-            e )
+            e
+        )
 
 
         st.code(
