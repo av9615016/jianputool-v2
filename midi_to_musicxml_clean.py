@@ -1,11 +1,11 @@
 # ============================================================
-# midi_to_musicxml_clean_v40_pro.py
+# midi_to_musicxml_clean.py
 #
 # JianpuTool Professional MVP 3.0
 #
-# Vocal MIDI -> MusicXML
+# MIDI -> MusicXML
 #
-# 流行歌曲旋律模式
+# Vocal Melody Pro
 #
 # ============================================================
 
@@ -13,51 +13,93 @@ import sys
 import music21
 
 
+
 # ============================================================
-# MIDI 讀取
+# Load MIDI
 # ============================================================
 
 def load_midi(path):
 
     print("讀取 MIDI...")
 
-    midi = music21.converter.parse(path)
-
-    return midi
+    return music21.converter.parse(path)
 
 
 
 # ============================================================
-# 找旋律
+# Extract Melody
+#
+# Note      -> 保留
+# Chord     -> 取最高音
+#
 # ============================================================
 
 def extract_melody(score):
 
-
     print("分析旋律...")
 
 
-    parts = score.parts
+    notes=[]
 
 
-    if len(parts) == 0:
-
-        return score
+    for part in score.parts:
 
 
-
-    # 取最高音平均線
-    notes = []
+        for n in part.recurse().notes:
 
 
-    for p in parts:
+            # ----------------------------
+            # 單音
+            # ----------------------------
+
+            if isinstance(
+                n,
+                music21.note.Note
+            ):
 
 
-        for n in p.recurse().notes:
+                notes.append(
+                    n
+                )
 
 
-            notes.append(n)
 
+            # ----------------------------
+            # 和弦
+            # 取最高音
+            # ----------------------------
+
+            elif isinstance(
+                n,
+                music21.chord.Chord
+            ):
+
+
+                highest=max(
+                    n.pitches,
+                    key=lambda x:x.midi
+                )
+
+
+                new_note=music21.note.Note(
+                    highest
+                )
+
+
+                new_note.offset=n.offset
+
+                new_note.duration=n.duration
+
+
+                notes.append(
+                    new_note
+                )
+
+
+
+    notes.sort(
+        key=lambda x:x.offset
+    )
 
 
     print(
@@ -66,20 +108,14 @@ def extract_melody(score):
     )
 
 
-
-    # 依時間排序
-
-    notes.sort(
-        key=lambda x:x.offset
-    )
-
-
     return notes
 
 
 
 # ============================================================
-# Vocal Melody Filter
+# Melody Filter Pro
+#
+# 保留流行歌旋律
 # ============================================================
 
 def melody_filter(notes):
@@ -93,7 +129,7 @@ def melody_filter(notes):
     result=[]
 
 
-    last_time=-1
+    last_offset=-1
 
 
 
@@ -103,13 +139,13 @@ def melody_filter(notes):
         pitch=n.pitch.midi
 
 
-        duration=n.duration.quarterLength
+        length=n.duration.quarterLength
 
 
 
         # 人聲範圍
 
-        if pitch < 35:
+        if pitch < 30:
             continue
 
 
@@ -118,18 +154,18 @@ def melody_filter(notes):
 
 
 
-        # 去除極短雜訊
+        # 太短雜訊
 
-        if duration < 0.08:
+        if length < 0.05:
             continue
 
 
 
-        # 避免完全重疊
+        # 移除完全重疊
 
         if abs(
-            n.offset-last_time
-        ) < 0.03:
+            n.offset-last_offset
+        ) < 0.02:
 
             continue
 
@@ -140,7 +176,7 @@ def melody_filter(notes):
         )
 
 
-        last_time=n.offset
+        last_offset=n.offset
 
 
 
@@ -155,10 +191,10 @@ def melody_filter(notes):
 
 
 # ============================================================
-# 建立 MusicXML
+# Build MusicXML
 # ============================================================
 
-def create_score(notes):
+def create_musicxml(notes):
 
 
     print(
@@ -172,11 +208,15 @@ def create_score(notes):
     part=music21.stream.Part()
 
 
+
+    # 4/4
+
     part.append(
         music21.meter.TimeSignature(
             "4/4"
         )
     )
+
 
 
     # tempo
@@ -189,7 +229,7 @@ def create_score(notes):
 
 
 
-    current_measure=music21.stream.Measure(
+    measure=music21.stream.Measure(
         number=1
     )
 
@@ -209,11 +249,18 @@ def create_score(notes):
         length=n.duration.quarterLength
 
 
-        # 避免超長
+
+        # 限制過長
 
         if length > 4:
 
             length=4
+
+
+
+        if length <=0:
+
+            length=0.25
 
 
 
@@ -226,7 +273,7 @@ def create_score(notes):
         if beat + length > 4:
 
 
-            current_measure.rightBarline = (
+            measure.rightBarline=(
                 music21.bar.Barline(
                     "regular"
                 )
@@ -234,12 +281,12 @@ def create_score(notes):
 
 
             part.append(
-                current_measure
+                measure
             )
 
 
-            current_measure=music21.stream.Measure(
-                number=current_measure.number+1
+            measure=music21.stream.Measure(
+                number=measure.number+1
             )
 
 
@@ -247,7 +294,7 @@ def create_score(notes):
 
 
 
-        current_measure.append(
+        measure.append(
             new_note
         )
 
@@ -256,10 +303,10 @@ def create_score(notes):
 
 
 
-    if len(current_measure.notes)>0:
+    if len(measure.notes)>0:
 
         part.append(
-            current_measure
+            measure
         )
 
 
@@ -284,7 +331,11 @@ def main():
 
 
         print(
-            "python midi_to_musicxml_clean_v40_pro.py input.mid output.musicxml"
+            "使用:"
+        )
+
+        print(
+            "python midi_to_musicxml_clean.py input.mid output.musicxml"
         )
 
         return
@@ -312,9 +363,10 @@ def main():
     )
 
 
-    score=create_score(
+    score=create_musicxml(
         notes
     )
+
 
 
     score.write(
