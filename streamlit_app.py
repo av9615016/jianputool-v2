@@ -379,73 +379,80 @@ if upload:
 
 
     # jianpu-ly 輸出目錄
-    ly_dir = job_dir
+    # ==================================================
+# 8 MusicXML -> Jianpu
+# ==================================================
+
+st.subheader(
+    "🎵 8. MusicXML → Jianpu"
+)
 
 
-    run_cmd(
-        [
-            PYTHON,
-            "-m",
-            "jianpu_ly",
-            "final.musicxml"
-        ],
-        cwd=str(job_dir)
+ly_file = job_dir / "jianpu.ly"
+
+
+cmd = [
+
+    PYTHON,
+
+    "-m",
+
+    "jianpu_ly",
+
+    str(final_xml)
+
+]
+
+
+with open(
+    ly_file,
+    "w",
+    encoding="utf-8"
+) as f:
+
+
+    result = subprocess.run(
+
+        cmd,
+
+        cwd=str(job_dir),
+
+        stdout=f,
+
+        stderr=subprocess.PIPE,
+
+        text=True
+
     )
 
 
-    # ==================================================
-    # 自動尋找 .ly
-    # ==================================================
 
-    ly_file = None
+if result.returncode != 0:
 
+    raise Exception(
 
-    search_list = [
+        "jianpu-ly錯誤:\n"
 
-          job_dir / "final.ly",
-          job_dir / "backup.ly",
-          job_dir / "final.musicxml.ly",
-          job_dir / "jianpu.ly"
+        +
 
-    ]
+        result.stderr
 
-
-    for f in search_list:
-
-        if f.exists():
-
-            ly_file = f
-
-            break
+    )
 
 
 
-    # 找不到固定名稱時
-    if ly_file is None:
+if not ly_file.exists():
 
-        ly_candidates = list(
-            ly_dir.glob("*.ly")
-        )
+    raise Exception(
 
+        "jianpu-ly 未產生 jianpu.ly"
 
-        if ly_candidates:
-
-            ly_file = ly_candidates[0]
+    )
 
 
-
-    if ly_file is None:
-
-        raise Exception(
-            "jianpu-ly 未產生 .ly\n"
-            "目前目錄:\n"
-            +
-            "\n".join(
-                os.listdir(ly_dir)
-            )
-        )
-
-
+st.success(
+    f"產生 LilyPond: {ly_file}"
+)
 
     st.success(
         f"找到 LilyPond: {ly_file}"
