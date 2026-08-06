@@ -4,7 +4,12 @@ import uuid
 import subprocess
 import glob
 import shutil
+import sys
 
+
+# ==========================
+# Page
+# ==========================
 
 st.set_page_config(
     page_title="JianpuTool AI Vocal",
@@ -14,6 +19,17 @@ st.set_page_config(
 
 st.title("🎵 JianpuTool AI Vocal → 簡譜")
 
+
+st.write("Python:")
+st.code(sys.executable)
+
+st.write("Version:")
+st.code(sys.version)
+
+
+# ==========================
+# Run Command
+# ==========================
 
 def run(cmd):
 
@@ -30,37 +46,59 @@ def run(cmd):
     st.text(result.stdout)
 
     if result.returncode != 0:
-        raise Exception(result.stdout)
+        raise Exception(
+            result.stdout
+        )
 
 
 
-
+# ==========================
+# Upload
+# ==========================
 
 upload = st.file_uploader(
-    "上傳 MP3",
-    type=["mp3","wav"]
+    "上傳 MP3 / WAV",
+    type=[
+        "mp3",
+        "wav"
+    ]
 )
+
 
 
 if upload:
 
 
-    work = "outputs/" + str(uuid.uuid4())
+    work = os.path.join(
+        "outputs",
+        str(uuid.uuid4())
+    )
 
-    os.makedirs(work,exist_ok=True)
+    os.makedirs(
+        work,
+        exist_ok=True
+    )
 
 
     input_file = os.path.join(
         work,
-        "input.mp3"
+        "input.wav"
     )
 
 
-    with open(input_file,"wb") as f:
-        f.write(upload.read())
+    with open(
+        input_file,
+        "wb"
+    ) as f:
+
+        f.write(
+            upload.read()
+        )
 
 
-    st.success("MP3 上傳完成")
+    st.success(
+        "音訊上傳完成"
+    )
 
 
 
@@ -68,7 +106,10 @@ if upload:
     # Demucs
     # ==========================
 
-    st.write("🎤 分離人聲...")
+
+    st.write(
+        "🎤 Demucs 分離人聲..."
+    )
 
 
     run([
@@ -80,8 +121,6 @@ if upload:
 
 
 
-    # 搜尋 vocal
-
     vocals = glob.glob(
         "separated/**/vocals.wav",
         recursive=True
@@ -89,6 +128,7 @@ if upload:
 
 
     if not vocals:
+
         raise Exception(
             "找不到 vocals.wav"
         )
@@ -107,6 +147,7 @@ if upload:
     # BasicPitch
     # ==========================
 
+
     st.write(
         "🎼 AI 抓 Vocal MIDI..."
     )
@@ -119,7 +160,7 @@ if upload:
 
 
     run([
-        "python",
+        sys.executable,
         "basicpitch_convert.py",
         vocal_file,
         vocal_mid
@@ -133,14 +174,14 @@ if upload:
     # ==========================
 
 
-    clean_mid=os.path.join(
+    clean_mid = os.path.join(
         work,
         "vocal_clean.mid"
     )
 
 
     run([
-        "python",
+        sys.executable,
         "vocal_midi_clean.py",
         vocal_mid,
         clean_mid
@@ -150,18 +191,18 @@ if upload:
 
 
     # ==========================
-    # MusicXML
+    # MIDI → MusicXML
     # ==========================
 
 
-    musicxml=os.path.join(
+    musicxml = os.path.join(
         work,
         "final.musicxml"
     )
 
 
     run([
-        "python",
+        sys.executable,
         "midi_to_musicxml_clean.py",
         clean_mid,
         musicxml
@@ -176,12 +217,12 @@ if upload:
 
 
     st.write(
-        "🎹 產生簡譜..."
+        "🎹 產生簡譜 LilyPond..."
     )
 
 
     run([
-        "python",
+        sys.executable,
         "-m",
         "jianpu_ly",
         musicxml
@@ -189,24 +230,42 @@ if upload:
 
 
 
-    ly_files=glob.glob(
-        "/tmp/*.ly"
+
+    # ==========================
+    # Find LY
+    # ==========================
+
+
+    ly_files = glob.glob(
+        "**/*.ly",
+        recursive=True
     )
 
 
     if not ly_files:
+
         raise Exception(
-            "找不到 ly"
+            "找不到 LilyPond .ly 檔案"
         )
 
 
-    ly_file=ly_files[-1]
+    ly_file = ly_files[-1]
+
+
+    st.success(
+        f"找到 LY: {ly_file}"
+    )
 
 
 
     # ==========================
     # LilyPond PDF
     # ==========================
+
+
+    st.write(
+        "📄 LilyPond 產生 PDF..."
+    )
 
 
     run([
@@ -216,24 +275,39 @@ if upload:
 
 
 
-    pdf_files=glob.glob(
-        "*.pdf"
+    pdf_files = glob.glob(
+        "**/*.pdf",
+        recursive=True
     )
 
 
     if pdf_files:
 
-        pdf=pdf_files[-1]
+
+        pdf = pdf_files[-1]
+
 
         st.success(
             "完成 🎉"
         )
 
 
-        with open(pdf,"rb") as f:
+        with open(
+            pdf,
+            "rb"
+        ) as f:
+
 
             st.download_button(
-                "下載簡譜 PDF",
-                f,
-                file_name="jianpu.pdf"
+                label="下載簡譜 PDF",
+                data=f,
+                file_name="jianpu.pdf",
+                mime="application/pdf"
             )
+
+
+    else:
+
+        raise Exception(
+            "沒有產生 PDF"
+        )
