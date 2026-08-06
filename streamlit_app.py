@@ -338,7 +338,7 @@ if uploaded:
 
         os.path.join(
             BASE_DIR,
-            "midi_to_musicxml_clean_v42_2_pro.py"
+            "midi_to_musicxml_clean.py"
         ),
 
         clean_mid,
