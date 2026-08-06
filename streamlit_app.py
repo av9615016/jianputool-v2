@@ -11,12 +11,12 @@ import traceback
 # ==========================
 
 st.set_page_config(
-    page_title="JianpuTool MVP 1.2.4",
+    page_title="JianpuTool MVP 1.2.5",
     page_icon="🎵"
 )
 
 
-st.title("🎵 JianpuTool MVP 1.2.4")
+st.title("🎵 JianpuTool MVP 1.2.5")
 
 
 st.write(
@@ -35,6 +35,8 @@ MusicXML Clean
 ↓
 Jianpu Fix
 ↓
+Final Quantize
+↓
 jianpu-ly
 ↓
 LilyPond
@@ -42,6 +44,7 @@ LilyPond
 PDF
 """
 )
+
 
 
 # ==========================
@@ -52,10 +55,12 @@ BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
 
+
 OUTPUT_DIR = os.path.join(
     BASE_DIR,
     "outputs"
 )
+
 
 os.makedirs(
     OUTPUT_DIR,
@@ -63,8 +68,9 @@ os.makedirs(
 )
 
 
+
 # ==========================
-# Execute
+# Command
 # ==========================
 
 def run_command(cmd):
@@ -73,6 +79,7 @@ def run_command(cmd):
         " ".join(cmd)
     )
 
+
     result = subprocess.run(
         cmd,
         stdout=subprocess.PIPE,
@@ -80,11 +87,14 @@ def run_command(cmd):
         text=True
     )
 
+
     st.text(
         result.stdout
     )
 
+
     if result.returncode != 0:
+
         raise Exception(
             result.stdout
         )
@@ -109,12 +119,15 @@ uploaded = st.file_uploader(
 
 if uploaded:
 
+
     job_id = str(uuid.uuid4())[:8]
+
 
     workdir = os.path.join(
         OUTPUT_DIR,
         job_id
     )
+
 
     os.makedirs(
         workdir,
@@ -142,6 +155,7 @@ if uploaded:
         f"上傳完成: {uploaded.name}"
     )
 
+
     st.info(
         f"工作目錄: {workdir}"
     )
@@ -151,6 +165,7 @@ if uploaded:
 
 
     try:
+
 
         # ==========================
         # Audio → MIDI
@@ -163,12 +178,9 @@ if uploaded:
 
             midi_file = input_file
 
-            st.info(
-                "使用 MIDI 輸入"
-            )
-
 
         else:
+
 
             st.info(
                 "🎧 BasicPitch Audio → MIDI"
@@ -194,13 +206,15 @@ if uploaded:
             )
 
 
+
         if not os.path.exists(
             midi_file
         ):
 
             raise Exception(
-                "MIDI 產生失敗"
+                "MIDI 不存在"
             )
+
 
 
         st.success(
@@ -210,7 +224,7 @@ if uploaded:
 
 
         # ==========================
-        # MIDI → MusicXML
+        # MIDI → raw MusicXML
         # ==========================
 
         st.info(
@@ -224,22 +238,19 @@ if uploaded:
         )
 
 
-        cmd = [
-            sys.executable,
-            "midi_to_musicxml_clean.py",
-            midi_file,
-            raw_xml
-        ]
-
-
         run_command(
-            cmd
+            [
+                sys.executable,
+                "midi_to_musicxml_clean.py",
+                midi_file,
+                raw_xml
+            ]
         )
 
 
 
         # ==========================
-        # Clean MusicXML
+        # Clean
         # ==========================
 
         clean_xml = os.path.join(
@@ -249,26 +260,49 @@ if uploaded:
 
 
         st.info(
-            "🧹 Clean MusicXML"
+            "🧹 clean_musicxml"
         )
 
 
-        cmd = [
-            sys.executable,
-            "clean_musicxml.py",
-            raw_xml,
-            clean_xml
-        ]
-
-
         run_command(
-            cmd
+            [
+                sys.executable,
+                "clean_musicxml.py",
+                raw_xml,
+                clean_xml
+            ]
         )
 
 
 
         # ==========================
         # Jianpu Fix
+        # ==========================
+
+        fixed_xml = os.path.join(
+            workdir,
+            "fixed.musicxml"
+        )
+
+
+        st.info(
+            "🎵 jianpu_fix_musicxml"
+        )
+
+
+        run_command(
+            [
+                sys.executable,
+                "jianpu_fix_musicxml.py",
+                clean_xml,
+                fixed_xml
+            ]
+        )
+
+
+
+        # ==========================
+        # Final Quantize
         # ==========================
 
         final_xml = os.path.join(
@@ -278,26 +312,23 @@ if uploaded:
 
 
         st.info(
-            "🎵 Jianpu MusicXML Fix"
+            "⏱ Final Quantize"
         )
 
 
-        cmd = [
-            sys.executable,
-            "jianpu_fix_musicxml.py",
-            clean_xml,
-            final_xml
-        ]
-
-
         run_command(
-            cmd
+            [
+                sys.executable,
+                "final_quantize.py",
+                fixed_xml,
+                final_xml
+            ]
         )
 
 
 
         # ==========================
-        # jianpu-ly
+        # Jianpu LY
         # ==========================
 
         st.info(
@@ -305,17 +336,15 @@ if uploaded:
         )
 
 
-        cmd = [
-            sys.executable,
-            "-m",
-            "jianpu_ly",
-            final_xml
-        ]
-
-
         run_command(
-            cmd
+            [
+                sys.executable,
+                "-m",
+                "jianpu_ly",
+                final_xml
+            ]
         )
+
 
 
         ly_file = None
@@ -333,10 +362,11 @@ if uploaded:
                 break
 
 
+
         if ly_file is None:
 
             raise Exception(
-                "找不到 .ly 檔案"
+                "找不到 ly"
             )
 
 
@@ -350,20 +380,18 @@ if uploaded:
         )
 
 
-        cmd = [
-            "lilypond",
-            "-o",
-            os.path.join(
-                workdir,
-                "jianpu"
-            ),
-            ly_file
-        ]
-
-
         run_command(
-            cmd
+            [
+                "lilypond",
+                "-o",
+                os.path.join(
+                    workdir,
+                    "jianpu"
+                ),
+                ly_file
+            ]
         )
+
 
 
         pdf_file = os.path.join(
@@ -372,25 +400,28 @@ if uploaded:
         )
 
 
+
         if not os.path.exists(
             pdf_file
         ):
 
             raise Exception(
-                "PDF 產生失敗"
+                "PDF 失敗"
             )
 
 
 
         st.success(
-            "🎉 簡譜 PDF 完成!"
+            "🎉 Jianpu PDF 完成!"
         )
+
 
 
         with open(
             pdf_file,
             "rb"
         ) as f:
+
 
             st.download_button(
                 "⬇️ 下載簡譜 PDF",
@@ -413,8 +444,7 @@ if uploaded:
 
 
         st.exception(
-            e
-        )
+            e )
 
 
         st.code(
