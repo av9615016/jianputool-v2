@@ -418,7 +418,7 @@ if upload:
         sys.executable,
         "-m",
         "jianpu_ly",
-        final_xml
+        "final.musicxml"
     ])
 
 
