@@ -3,8 +3,8 @@ import os
 import uuid
 import subprocess
 import glob
-import shutil
 import sys
+import traceback
 
 
 # ==========================
@@ -16,15 +16,15 @@ st.set_page_config(
     page_icon="🎵"
 )
 
-
 st.title("🎵 JianpuTool AI Vocal → 簡譜")
 
 
-st.write("Python:")
+st.write("Python Environment:")
 st.code(sys.executable)
 
-st.write("Version:")
+st.write("Python Version:")
 st.code(sys.version)
+
 
 
 # ==========================
@@ -36,19 +36,36 @@ def run(cmd):
     st.write("執行:")
     st.code(" ".join(cmd))
 
-    result = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True
-    )
 
-    st.text(result.stdout)
+    try:
 
-    if result.returncode != 0:
-        raise Exception(
-            result.stdout
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
         )
+
+
+        st.text(result.stdout)
+
+
+        if result.returncode != 0:
+
+            raise Exception(
+                result.stdout
+            )
+
+
+    except Exception:
+
+        st.error(
+            "執行失敗"
+        )
+
+        traceback.print_exc()
+
+        raise
 
 
 
@@ -74,6 +91,7 @@ if upload:
         str(uuid.uuid4())
     )
 
+
     os.makedirs(
         work,
         exist_ok=True
@@ -97,7 +115,7 @@ if upload:
 
 
     st.success(
-        "音訊上傳完成"
+        "音檔上傳完成"
     )
 
 
@@ -149,7 +167,7 @@ if upload:
 
 
     st.write(
-        "🎼 AI 抓 Vocal MIDI..."
+        "🎼 AI Vocal MIDI..."
     )
 
 
@@ -165,7 +183,6 @@ if upload:
         vocal_file,
         vocal_mid
     ])
-
 
 
 
@@ -191,7 +208,7 @@ if upload:
 
 
     # ==========================
-    # MIDI → MusicXML
+    # MIDI -> MusicXML
     # ==========================
 
 
@@ -217,7 +234,7 @@ if upload:
 
 
     st.write(
-        "🎹 產生簡譜 LilyPond..."
+        "🎹 產生簡譜..."
     )
 
 
@@ -232,7 +249,7 @@ if upload:
 
 
     # ==========================
-    # Find LY
+    # Find LilyPond file
     # ==========================
 
 
@@ -245,7 +262,7 @@ if upload:
     if not ly_files:
 
         raise Exception(
-            "找不到 LilyPond .ly 檔案"
+            "找不到 .ly"
         )
 
 
@@ -253,8 +270,9 @@ if upload:
 
 
     st.success(
-        f"找到 LY: {ly_file}"
+        f"找到 LilyPond: {ly_file}"
     )
+
 
 
 
@@ -264,7 +282,7 @@ if upload:
 
 
     st.write(
-        "📄 LilyPond 產生 PDF..."
+        "📄 LilyPond PDF..."
     )
 
 
@@ -281,33 +299,30 @@ if upload:
     )
 
 
-    if pdf_files:
+    if not pdf_files:
 
-
-        pdf = pdf_files[-1]
-
-
-        st.success(
-            "完成 🎉"
+        raise Exception(
+            "PDF產生失敗"
         )
 
 
-        with open(
-            pdf,
-            "rb"
-        ) as f:
+    pdf = pdf_files[-1]
 
 
-            st.download_button(
-                label="下載簡譜 PDF",
-                data=f,
-                file_name="jianpu.pdf",
-                mime="application/pdf"
-            )
+    st.success(
+        "🎉 完成"
+    )
 
 
-    else:
+    with open(
+        pdf,
+        "rb"
+    ) as f:
 
-        raise Exception(
-            "沒有產生 PDF"
+
+        st.download_button(
+            label="下載簡譜 PDF",
+            data=f,
+            file_name="jianpu.pdf",
+            mime="application/pdf"
         )
