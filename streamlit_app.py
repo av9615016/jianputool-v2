@@ -1,39 +1,34 @@
-# ============================================================
-# JianpuTool Professional MVP 2.2
-# Streamlit App
+# streamlit_app_professional_mvp2.2.py
 #
-# Pipeline:
+# JianpuTool Professional MVP 2.2
 #
 # MP3/WAV
 # ↓
-# Demucs Vocal Separation
+# Demucs Vocal Only
 # ↓
 # BasicPitch
 # ↓
-# MIDI Clean
+# Melody Clean
 # ↓
 # MusicXML
 # ↓
-# Jianpu Safe Fix
+# Quantize
 # ↓
-# LilyPond PDF
-#
-# ============================================================
+# Jianpu PDF
 
 
 import streamlit as st
 import os
-import sys
 import uuid
 import glob
 import subprocess
 import shutil
-import traceback
+import sys
 
 
-# ============================================================
+# ==========================
 # Page
-# ============================================================
+# ==========================
 
 st.set_page_config(
     page_title="JianpuTool Professional MVP 2.2",
@@ -48,38 +43,36 @@ st.title(
 
 st.write(
 """
-AI Vocal → MIDI → MusicXML → 數字簡譜 PDF
+AI Vocal → MIDI → MusicXML → 簡譜 PDF
 
 Professional Pipeline:
 
-🎤 Demucs Vocal Separation
-↓
+MP3/WAV
+ ↓
+🎤 Vocal Separation Only
+ ↓
 🎼 BasicPitch AI Melody
-↓
+ ↓
 🎹 Melody Clean Pro
-↓
+ ↓
 📄 MusicXML
-↓
-🎵 Jianpu Safe Fix
-↓
-📘 Jianpu PDF
+ ↓
+🎵 Jianpu PDF
 """
 )
 
 
-
-# ============================================================
+# ==========================
 # Command Runner
-# ============================================================
-
+# ==========================
 
 def run(cmd):
 
     st.write("執行:")
+
     st.code(
         " ".join(cmd)
     )
-
 
     result = subprocess.run(
         cmd,
@@ -101,17 +94,12 @@ def run(cmd):
         )
 
 
-    return result.stdout
-
-
-
-# ============================================================
+# ==========================
 # Upload
-# ============================================================
-
+# ==========================
 
 upload = st.file_uploader(
-    "上傳 MP3 / WAV",
+    "上傳歌曲 MP3 / WAV",
     type=[
         "mp3",
         "wav"
@@ -121,11 +109,6 @@ upload = st.file_uploader(
 
 
 if upload:
-
-
-    # ========================================================
-    # Work Directory
-    # ========================================================
 
 
     work = os.path.join(
@@ -157,43 +140,37 @@ if upload:
 
 
     st.success(
-        f"上傳完成: {input_file}"
+        "歌曲上傳完成"
     )
 
 
 
-    # ========================================================
-    # 1. Demucs
-    # ========================================================
-
+    # ==========================
+    # Vocal Only Separation
+    # ==========================
 
     st.subheader(
         "🎤 1. Vocal Separation"
     )
 
 
-    run(
-        [
-            sys.executable,
-            "-m",
-            "demucs",
-            "-n",
-            "htdemucs",
-            input_file
-        ]
-    )
+    run([
+        sys.executable,
+        "-m",
+        "demucs",
+        "--two-stems=vocals",
+        "-n",
+        "htdemucs",
+        input_file
+    ])
 
-
-
-    # ========================================================
-    # Find vocals.wav
-    # ========================================================
 
 
     vocals = glob.glob(
         "separated/**/vocals.wav",
         recursive=True
     )
+
 
 
     if not vocals:
@@ -207,15 +184,14 @@ if upload:
 
 
     st.success(
-        f"找到人聲:\n{vocal_file}"
+        f"取得人聲: {vocal_file}"
     )
 
 
 
-    # ========================================================
-    # 2. BasicPitch
-    # ========================================================
-
+    # ==========================
+    # BasicPitch
+    # ==========================
 
     st.subheader(
         "🎼 2. BasicPitch AI Melody"
@@ -228,23 +204,20 @@ if upload:
     )
 
 
-    run(
-        [
-            sys.executable,
-            "basicpitch_convert.py",
-            vocal_file,
-            vocal_mid
-        ]
-    )
+    run([
+        sys.executable,
+        "basicpitch_convert.py",
+        vocal_file,
+        vocal_mid
+    ])
 
 
     st.success(
-        "BasicPitch MIDI 完成"
+        "MIDI 完成"
     )
-  # ========================================================
-    # 3. Melody Clean Pro
-    # ========================================================
-
+  # ==========================
+    # Melody Clean Pro
+    # ==========================
 
     st.subheader(
         "🎹 3. Melody Clean Pro"
@@ -253,50 +226,45 @@ if upload:
 
     clean_mid = os.path.join(
         work,
-        "clean.mid"
+        "vocal_clean.mid"
     )
 
 
-    run(
-        [
-            sys.executable,
-            "melody_clean_pro.py",
-            vocal_mid,
-            clean_mid
-        ]
-    )
+    run([
+        sys.executable,
+        "melody_clean_pro.py",
+        vocal_mid,
+        clean_mid
+    ])
 
 
     st.success(
-        "Melody Clean 完成"
+        "旋律清理完成"
     )
 
 
 
-    # ========================================================
-    # 4. MIDI -> MusicXML
-    # ========================================================
-
+    # ==========================
+    # MIDI → MusicXML
+    # ==========================
 
     st.subheader(
         "🎼 4. MIDI → MusicXML"
     )
 
 
-    raw_xml = os.path.join(
+    raw_musicxml = os.path.join(
         work,
         "raw.musicxml"
     )
 
 
-    run(
-        [
-            sys.executable,
-            "midi_to_musicxml_clean.py",
-            clean_mid,
-            raw_xml
-        ]
-    )
+    run([
+        sys.executable,
+        "midi_to_musicxml_clean.py",
+        clean_mid,
+        raw_musicxml
+    ])
 
 
     st.success(
@@ -305,164 +273,117 @@ if upload:
 
 
 
-    # ========================================================
-    # 5. Jianpu Safe Fix
-    # ========================================================
-
+    # ==========================
+    # Jianpu Safe Fix
+    # ==========================
 
     st.subheader(
         "🛠 5. Jianpu Safe Fix"
     )
 
 
-    fixed_xml = os.path.join(
+    fixed_musicxml = os.path.join(
         work,
         "fixed.musicxml"
     )
 
 
-    run(
-        [
-            sys.executable,
-            "jianpu_safe_fix.py",
-            raw_xml,
-            fixed_xml
-        ]
-    )
+    run([
+        sys.executable,
+        "jianpu_safe_fix.py",
+        raw_musicxml,
+        fixed_musicxml
+    ])
+
 
 
     st.success(
-        "Safe Fix 完成"
+        "MusicXML 修正完成"
     )
 
 
 
-    # ========================================================
-    # 6. Final Quantize
-    # ========================================================
-
+    # ==========================
+    # Final Quantize
+    # ==========================
 
     st.subheader(
-        "⏱ Final Quantize"
+        "⏱ 6. Final Quantize"
     )
 
 
-    final_xml = os.path.join(
+    final_musicxml = os.path.join(
         work,
         "final.musicxml"
     )
 
 
-    run(
-        [
-            sys.executable,
-            "final_quantize.py",
-            fixed_xml,
-            final_xml
-        ]
-    )
+    run([
+        sys.executable,
+        "final_quantize.py",
+        fixed_musicxml,
+        final_musicxml
+    ])
 
 
     st.success(
-        "Final MusicXML 完成"
+        "節奏量化完成"
     )
 
 
 
-    # ========================================================
-    # 7. Measure Check
-    # ========================================================
-
+    # ==========================
+    # Measure Check
+    # ==========================
 
     st.subheader(
-        "📏 Measure Check"
+        "🔍 7. Measure Check"
     )
 
 
-    run(
-        [
-            sys.executable,
-            "check_measure.py",
-            final_xml
-        ]
-    )
+    run([
+        sys.executable,
+        "check_measure.py",
+        final_musicxml
+    ])
 
 
     st.success(
-        "✅ 小節檢查完成"
+        "✅ 小節檢查通過"
     )
-
-
-
-    # ========================================================
-    # Save path
-    # ========================================================
-
-
-    st.session_state["final_xml"] = final_xml
-    st.session_state["work"] = work
- # ========================================================
-    # 8. MusicXML -> jianpu.ly
-    # ========================================================
-
+# ==========================
+    # MusicXML → Jianpu LilyPond
+    # ==========================
 
     st.subheader(
         "🎵 8. MusicXML → Jianpu"
     )
 
 
-    try:
+    run([
+        sys.executable,
+        "-m",
+        "jianpu_ly",
+        final_musicxml
+    ])
 
-        run(
-            [
-                sys.executable,
-                "-m",
-                "jianpu_ly",
-                final_xml
-            ]
+
+
+    # ==========================
+    # 找 ly
+    # ==========================
+
+    ly_files = glob.glob(
+        "*.ly"
+    )
+
+
+    if not ly_files:
+
+        ly_files = glob.glob(
+            "**/*.ly",
+            recursive=True
         )
-
-
-    except Exception as e:
-
-        st.error(
-            "jianpu_ly 產生失敗"
-        )
-
-        st.code(
-            traceback.format_exc()
-        )
-
-        raise e
-
-
-
-    # ========================================================
-    # Find ly file
-    # ========================================================
-
-
-    ly_files = []
-
-
-    search_paths = [
-        work,
-        ".",
-        "/tmp"
-    ]
-
-
-    for p in search_paths:
-
-        ly_files.extend(
-            glob.glob(
-                os.path.join(
-                    p,
-                    "*.ly"
-                )
-            )
-        )
-
 
 
     if not ly_files:
@@ -472,106 +393,76 @@ if upload:
         )
 
 
-
     ly_file = ly_files[-1]
 
 
     st.success(
-        f"找到 LilyPond 檔案:\n{ly_file}"
+        f"產生: {ly_file}"
     )
 
 
 
-    # ========================================================
-    # 9. LilyPond PDF
-    # ========================================================
-
+    # ==========================
+    # LilyPond PDF
+    # ==========================
 
     st.subheader(
-        "📘 9. LilyPond PDF"
+        "📄 9. LilyPond PDF"
     )
 
 
-    run(
-        [
-            "lilypond",
-            ly_file
-        ]
+    run([
+        "lilypond",
+        ly_file
+    ])
+
+
+
+    # ==========================
+    # 找 PDF
+    # ==========================
+
+    pdf_files = glob.glob(
+        "*.pdf"
     )
-
-
-
-    # ========================================================
-    # Find PDF
-    # ========================================================
-
-
-    pdf_files = []
-
-
-    pdf_files.extend(
-        glob.glob(
-            os.path.join(
-                work,
-                "*.pdf"
-            )
-        )
-    )
-
-
-    pdf_files.extend(
-        glob.glob(
-            "*.pdf"
-        )
-    )
-
 
 
     if not pdf_files:
 
+        pdf_files = glob.glob(
+            "**/*.pdf",
+            recursive=True
+        )
+
+
+
+    if pdf_files:
+
+
+        pdf = pdf_files[-1]
+
+
+        st.success(
+            "🎉 簡譜 PDF 完成"
+        )
+
+
+        with open(
+            pdf,
+            "rb"
+        ) as f:
+
+
+            st.download_button(
+                label="⬇️ 下載簡譜 PDF",
+                data=f,
+                file_name="jianpu.pdf",
+                mime="application/pdf"
+            )
+
+
+    else:
+
         raise Exception(
             "找不到 PDF"
         )
-
-
-    pdf = pdf_files[-1]
-
-
-
-    st.success(
-        "🎉 Jianpu PDF 完成"
-    )
-
-
-
-    # ========================================================
-    # Download
-    # ========================================================
-
-
-    with open(
-        pdf,
-        "rb"
-    ) as f:
-
-
-        st.download_button(
-            label="⬇️ 下載簡譜 PDF",
-            data=f,
-            file_name="jianpu.pdf",
-            mime="application/pdf"
-        )
-
-
-
-    st.info(
-        f"""
-完成！
-
-工作目錄:
-{work}
-
-PDF:
-{pdf}
-"""
-    )
