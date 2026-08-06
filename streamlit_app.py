@@ -322,7 +322,7 @@ if upload:
 
     run([
         sys.executable,
-        "midi_to_musicxml_clean_v42_2_pro.py",
+        "midi_to_musicxml_clean.py",
         clean_midi,
         raw_xml
     ])
