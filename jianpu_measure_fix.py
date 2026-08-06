@@ -1,100 +1,320 @@
-import sys
-import xml.etree.ElementTree as ET
+# ============================================================
+# jianpu_measure_fix.py
+#
+# JianpuTool Professional MVP 2.3.2
+#
+# MusicXML Measure Fix
+#
+# Fix:
+#   - empty measure
+#   - invalid measure duration
+#   - jianpu_ly KeyError
+#
+# ============================================================
 
+
+import sys
+from lxml import etree
+
+
+
+# ------------------------------------------------------------
+# namespace
+# ------------------------------------------------------------
 
 def tag(x):
+
     if "}" in x:
-        return x.split("}")[-1]
+        return x.split("}",1)[1]
+
     return x
 
 
 
-def fix(src,dst):
+# ------------------------------------------------------------
+# calculate duration
+# ------------------------------------------------------------
+
+def get_duration(measure):
+
+    total=0
 
 
-    print("讀取:",src)
+    for note in measure.iter():
+
+        if tag(note.tag)=="note":
 
 
-    tree=ET.parse(src)
+            for child in note:
 
-    root=tree.getroot()
+                if tag(child.tag)=="duration":
+
+                    try:
+
+                        total += int(child.text)
+
+                    except:
+
+                        pass
+
+
+    return total
+
+
+
+# ------------------------------------------------------------
+# get divisions
+# ------------------------------------------------------------
+
+def get_divisions(root):
+
+    for e in root.iter():
+
+        if tag(e.tag)=="divisions":
+
+            try:
+
+                return int(e.text)
+
+            except:
+
+                pass
+
+
+    return 1
+
+
+
+# ------------------------------------------------------------
+# remove empty measures
+# ------------------------------------------------------------
+
+def remove_empty_measure(root):
+
+
+    remove=[]
+
+
+    for parent in root.iter():
+
+        for child in list(parent):
+
+
+            if tag(child.tag)=="measure":
+
+
+                has_note=False
+
+
+                for n in child.iter():
+
+                    if tag(n.tag)=="note":
+
+                        has_note=True
+
+
+
+                if not has_note:
+
+                    remove.append(
+                        (parent,child)
+                    )
+
+
+
+    for p,c in remove:
+
+        p.remove(c)
+
+
+
+    print(
+        "移除空小節:",
+        len(remove)
+    )
+
+
+
+# ------------------------------------------------------------
+# normalize measure
+# ------------------------------------------------------------
+
+def fix_measure(root):
+
+
+    divisions=get_divisions(root)
+
+
+    print(
+        "Divisions:",
+        divisions
+    )
+
+
+    max_tick = divisions * 4
+
+
+
+    count=0
 
 
     for measure in root.iter():
 
 
-        if tag(measure.tag)=="measure":
+        if tag(measure.tag)!="measure":
 
-
-            total=0
-
-
-            for d in measure.iter():
-
-
-                if tag(d.tag)=="duration":
-
-                    try:
-                        total += float(d.text)
-                    except:
-                        pass
+            continue
 
 
 
-            # 4/4 divisions=4
-            # 一小節=16
+        dur=get_duration(
+            measure
+        )
 
 
-            if total > 16:
+        # -----------------------------------
+        # 移除沒有內容的小節
+        # -----------------------------------
 
+        if dur==0:
 
-                print(
-                    "修正超長小節:",
-                    measure.attrib.get("number"),
-                    total
-                )
-
-
-                notes=[]
-
-                for child in list(measure):
-
-                    if tag(child.tag)=="note":
-
-                        notes.append(child)
+            continue
 
 
 
-                # 移除超出的 note
+        # -----------------------------------
+        # 過長小節保護
+        # -----------------------------------
 
-                acc=0
-
-
-                for n in notes:
-
-                    dur=0
-
-                    for x in n.iter():
-
-                        if tag(x.tag)=="duration":
-
-                            dur=float(x.text)
+        if dur > max_tick:
 
 
-                    if acc+dur >16:
+            print(
+                "修正超長小節:",
+                measure.get("number"),
+                dur
+            )
 
-                        measure.remove(n)
 
-                    else:
+            # 找最後 note
+            notes=[]
 
-                        acc+=dur
+
+            for n in measure.iter():
+
+                if tag(n.tag)=="note":
+
+                    notes.append(n)
+
+
+
+            if notes:
+
+
+                last=notes[-1]
+
+
+                for c in list(last):
+
+                    if tag(c.tag)=="duration":
+
+                        old=int(c.text)
+
+
+                        new=max(
+                            1,
+                            max_tick-(dur-old)
+                        )
+
+
+                        c.text=str(new)
+
+
+                        break
+
+
+
+        count+=1
+
+
+
+    print(
+        "處理小節:",
+        count
+    )
+
+
+
+# ------------------------------------------------------------
+# main
+# ------------------------------------------------------------
+
+def main():
+
+
+    if len(sys.argv)<3:
+
+        print(
+            "Usage:"
+        )
+
+        print(
+            "python jianpu_measure_fix.py input.musicxml output.musicxml"
+        )
+
+        return
+
+
+
+    src=sys.argv[1]
+
+    dst=sys.argv[2]
+
+
+
+    print(
+        "讀取:",
+        src
+    )
+
+
+
+    parser=etree.XMLParser(
+        remove_blank_text=True
+    )
+
+
+    tree=etree.parse(
+        src,
+        parser
+    )
+
+
+    root=tree.getroot()
+
+
+
+    remove_empty_measure(
+        root
+    )
+
+
+    fix_measure(
+        root
+    )
 
 
 
     tree.write(
+
         dst,
-        encoding="utf-8",
-        xml_declaration=True
+
+        encoding="UTF-8",
+
+        xml_declaration=True,
+
+        pretty_print=True
+
     )
 
 
@@ -107,7 +327,4 @@ def fix(src,dst):
 
 if __name__=="__main__":
 
-    fix(
-        sys.argv[1],
-        sys.argv[2]
-    )
+    main()
