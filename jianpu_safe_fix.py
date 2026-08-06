@@ -1,209 +1,260 @@
-# ==========================================================
-# jianpu_safe_fix.py
+# ============================================================
+# Jianpu Safe Fix MVP 2.3
 #
-# JianpuTool Professional MVP 2.2
+# MusicXML Safety Repair
 #
-# MusicXML -> Safe MusicXML
+# raw.musicxml
+#       |
+#       v
+# fixed.musicxml
 #
-# Fix:
-#   - jianpu_ly barcheck fail
-#   - remove tie
-#   - normalize duration
-#   - measure protection
-#
-# ==========================================================
+# ============================================================
 
 
 import sys
 from lxml import etree
-from fractions import Fraction
 
 
-DIVISION_DEFAULT = 4
-
-
+# ============================================================
+# Namespace
+# ============================================================
 
 def remove_namespace(tag):
+
+    # 修正 lxml special node
+    if not isinstance(tag, str):
+        return ""
+
     if "}" in tag:
-        return tag.split("}")[1]
+        return tag.split("}", 1)[1]
+
     return tag
 
 
 
+# ============================================================
+# Find divisions
+# ============================================================
+
 def get_divisions(root):
 
     for e in root.iter():
-        if remove_namespace(e.tag) == "divisions":
-            return int(e.text)
 
-    return DIVISION_DEFAULT
+        tag = remove_namespace(
+            e.tag
+        )
 
-
-
-def remove_ties(root):
-
-    count = 0
-
-    for tie in root.xpath(
-        "//*[local-name()='tie']"
-    ):
-        parent = tie.getparent()
-
-        if parent is not None:
-            parent.remove(tie)
-            count += 1
-
-
-    for tied in root.xpath(
-        "//*[local-name()='tied']"
-    ):
-        parent = tied.getparent()
-
-        if parent is not None:
-            parent.remove(tied)
-            count += 1
-
-
-    return count
-
-
-
-
-def fix_duration(root, divisions):
-
-    fixed = 0
-
-
-    # 四分音符最大4拍
-    max_duration = divisions * 4
-
-
-    for duration in root.xpath(
-        "//*[local-name()='duration']"
-    ):
-
-        try:
-
-            value = int(duration.text)
-
-
-            if value > max_duration:
-
-                duration.text = str(
-                    max_duration
-                )
-
-                fixed += 1
-
-
-        except:
-
-            pass
-
-
-    return fixed
-
-
-
-
-
-def check_measure(root, divisions):
-
-    measures = 0
-    errors = 0
-
-
-    for measure in root.xpath(
-        "//*[local-name()='measure']"
-    ):
-
-        measures += 1
-
-
-        total = 0
-
-
-        for duration in measure.xpath(
-            ".//*[local-name()='duration']"
-        ):
+        if tag == "divisions":
 
             try:
-                total += int(duration.text)
+                return int(e.text)
 
             except:
                 pass
 
 
-        beats = total / divisions
-
-
-        # 允許誤差
-        if beats > 4.1:
-
-            errors += 1
-
-
-    return measures, errors
+    return 480
 
 
 
+# ============================================================
+# Safe integer
+# ============================================================
+
+def safe_int(value):
+
+    try:
+        return int(value)
+
+    except:
+        return 0
 
 
-def fix_voice(root):
 
-    """
-    移除 voice 造成的
-    jianpu_ly 排版問題
-    """
+# ============================================================
+# Fix duration
+# ============================================================
+
+def fix_duration(root, divisions):
+
 
     count = 0
 
 
-    for voice in root.xpath(
-        "//*[local-name()='voice']"
-    ):
+    for e in root.iter():
 
-        parent = voice.getparent()
 
-        if parent is not None:
+        tag = remove_namespace(
+            e.tag
+        )
 
-            parent.remove(voice)
+
+        if tag == "duration":
+
+
+            value = safe_int(
+                e.text
+            )
+
+
+            if value <= 0:
+
+                e.text = "1"
+
+                count += 1
+
+
+
+    print(
+        "修正 duration:",
+        count
+    )
+
+
+
+# ============================================================
+# Fix rests
+# ============================================================
+
+def fix_rests(root):
+
+
+    count = 0
+
+
+    for note in root.iter():
+
+
+        if remove_namespace(note.tag) != "note":
+            continue
+
+
+        has_pitch = False
+
+        has_rest = False
+
+
+        for child in note:
+
+
+            tag = remove_namespace(
+                child.tag
+            )
+
+
+            if tag == "pitch":
+
+                has_pitch = True
+
+
+            if tag == "rest":
+
+                has_rest = True
+
+
+
+        # note 沒 pitch 也沒 rest
+
+        if not has_pitch and not has_rest:
+
+
+            rest = etree.Element(
+                "rest"
+            )
+
+
+            note.insert(
+                0,
+                rest
+            )
+
 
             count += 1
 
 
-    return count
+
+    print(
+        "修正空白 note:",
+        count
+    )
 
 
 
+# ============================================================
+# Remove invalid nodes
+# ============================================================
 
+def clean_nodes(root):
+
+
+    remove = []
+
+
+    for e in root.iter():
+
+
+        if not isinstance(
+            e.tag,
+            str
+        ):
+
+            remove.append(
+                e
+            )
+
+
+    for e in remove:
+
+
+        parent = e.getparent()
+
+
+        if parent is not None:
+
+            parent.remove(
+                e
+            )
+
+
+    print(
+        "移除特殊 XML node:",
+        len(remove)
+    )
+
+
+
+# ============================================================
+# Main
+# ============================================================
 
 def main():
 
 
-    if len(sys.argv)<3:
+    if len(sys.argv) < 3:
+
 
         print(
-            "Usage:"
+            "使用:"
         )
 
         print(
             "python jianpu_safe_fix.py input.musicxml output.musicxml"
         )
 
-        sys.exit(1)
+        return
 
 
 
-    input_file=sys.argv[1]
+    input_file = sys.argv[1]
 
-    output_file=sys.argv[2]
+    output_file = sys.argv[2]
+
 
 
     print("="*50)
 
     print(
-        "Jianpu Safe Fix MVP 2.2"
+        "Jianpu Safe Fix MVP 2.3"
     )
 
     print("="*50)
@@ -216,22 +267,32 @@ def main():
     )
 
 
-    parser=etree.XMLParser(
-        remove_blank_text=True
+
+    parser = etree.XMLParser(
+        remove_comments=False,
+        recover=True
     )
 
 
-    tree=etree.parse(
+    tree = etree.parse(
         input_file,
         parser
     )
 
 
-    root=tree.getroot()
+    root = tree.getroot()
 
 
 
-    divisions=get_divisions(
+    # 清理特殊節點
+
+    clean_nodes(
+        root
+    )
+
+
+
+    divisions = get_divisions(
         root
     )
 
@@ -243,75 +304,14 @@ def main():
 
 
 
-    print(
-        "\n移除 tie..."
-    )
-
-
-    tie_count=remove_ties(
-        root
-    )
-
-
-    print(
-        "Tie:",
-        tie_count
-    )
-
-
-
-    print(
-        "\n修正 duration..."
-    )
-
-
-    duration_count=fix_duration(
+    fix_duration(
         root,
         divisions
     )
 
 
-    print(
-        "Duration:",
-        duration_count
-    )
-
-
-
-    print(
-        "\n移除 voice..."
-    )
-
-
-    voice_count=fix_voice(
+    fix_rests(
         root
-    )
-
-
-    print(
-        "Voice:",
-        voice_count
-    )
-
-
-
-    measures,errors=check_measure(
-        root,
-        divisions
-    )
-
-
-    print()
-
-    print(
-        "Measures:",
-        measures
-    )
-
-
-    print(
-        "Measure errors:",
-        errors
     )
 
 
@@ -324,7 +324,6 @@ def main():
     )
 
 
-    print()
 
     print(
         "完成:"
@@ -334,11 +333,8 @@ def main():
         output_file
     )
 
-    print("="*50)
 
 
-
-
-if __name__=="__main__":
+if __name__ == "__main__":
 
     main()
