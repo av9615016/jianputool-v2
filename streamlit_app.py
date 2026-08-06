@@ -1,40 +1,39 @@
-# =====================================================
-# streamlit_app_professional_mvp2.2.py
-#
+# ============================================================
 # JianpuTool Professional MVP 2.2
+# Streamlit App
+#
+# Pipeline:
 #
 # MP3/WAV
 # ↓
-# Demucs Vocal
+# Demucs Vocal Separation
 # ↓
 # BasicPitch
 # ↓
-# Melody MIDI
+# MIDI Clean
 # ↓
 # MusicXML
 # ↓
-# Final Quantize
-# ↓
 # Jianpu Safe Fix
-# ↓
-# Jianpu-ly
 # ↓
 # LilyPond PDF
 #
-# =====================================================
+# ============================================================
 
 
 import streamlit as st
 import os
+import sys
 import uuid
-import subprocess
 import glob
+import subprocess
 import shutil
+import traceback
 
 
-# ===============================
+# ============================================================
 # Page
-# ===============================
+# ============================================================
 
 st.set_page_config(
     page_title="JianpuTool Professional MVP 2.2",
@@ -49,41 +48,34 @@ st.title(
 
 st.write(
 """
-AI Vocal → MIDI → MusicXML → 簡譜 PDF
+AI Vocal → MIDI → MusicXML → 數字簡譜 PDF
 
 Professional Pipeline:
 
-Audio
+🎤 Demucs Vocal Separation
 ↓
-Vocal Separation
+🎼 BasicPitch AI Melody
 ↓
-BasicPitch
+🎹 Melody Clean Pro
 ↓
-Melody Tracking
+📄 MusicXML
 ↓
-MusicXML
+🎵 Jianpu Safe Fix
 ↓
-Measure Check
-↓
-Safe Fix
-↓
-Jianpu PDF
+📘 Jianpu PDF
 """
 )
 
 
 
-# ===============================
+# ============================================================
 # Command Runner
-# ===============================
+# ============================================================
 
 
 def run(cmd):
 
-    st.write(
-        "執行:"
-    )
-
+    st.write("執行:")
     st.code(
         " ".join(cmd)
     )
@@ -109,10 +101,13 @@ def run(cmd):
         )
 
 
+    return result.stdout
 
-# ===============================
+
+
+# ============================================================
 # Upload
-# ===============================
+# ============================================================
 
 
 upload = st.file_uploader(
@@ -126,6 +121,11 @@ upload = st.file_uploader(
 
 
 if upload:
+
+
+    # ========================================================
+    # Work Directory
+    # ========================================================
 
 
     work = os.path.join(
@@ -157,14 +157,14 @@ if upload:
 
 
     st.success(
-        "上傳完成"
+        f"上傳完成: {input_file}"
     )
 
 
 
-    # ===============================
-    # Demucs
-    # ===============================
+    # ========================================================
+    # 1. Demucs
+    # ========================================================
 
 
     st.subheader(
@@ -172,15 +172,22 @@ if upload:
     )
 
 
-    run([
-        "python",
-        "-m",
-        "demucs",
-        "-n",
-        "htdemucs",
-        input_file
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "demucs",
+            "-n",
+            "htdemucs",
+            input_file
+        ]
+    )
 
+
+
+    # ========================================================
+    # Find vocals.wav
+    # ========================================================
 
 
     vocals = glob.glob(
@@ -200,51 +207,43 @@ if upload:
 
 
     st.success(
-        f"Vocal:{vocal_file}"
+        f"找到人聲:\n{vocal_file}"
     )
- # ===============================
-    # BasicPitch
-    # ===============================
+
+
+
+    # ========================================================
+    # 2. BasicPitch
+    # ========================================================
 
 
     st.subheader(
-        "🎼 2. BasicPitch AI MIDI"
+        "🎼 2. BasicPitch AI Melody"
     )
 
 
-    midi_file = os.path.join(
+    vocal_mid = os.path.join(
         work,
         "vocal.mid"
     )
 
 
-    run([
-        "python",
-        "basicpitch_convert.py",
-        vocal_file,
-        midi_file
-    ])
-
-
-
-    if not os.path.exists(
-        midi_file
-    ):
-
-        raise Exception(
-            "MIDI 產生失敗"
-        )
-
-
-    st.success(
-        "MIDI 完成"
+    run(
+        [
+            sys.executable,
+            "basicpitch_convert.py",
+            vocal_file,
+            vocal_mid
+        ]
     )
 
 
-
-    # ===============================
-    # Melody Clean Pro
-    # ===============================
+    st.success(
+        "BasicPitch MIDI 完成"
+    )
+  # ========================================================
+    # 3. Melody Clean Pro
+    # ========================================================
 
 
     st.subheader(
@@ -258,30 +257,25 @@ if upload:
     )
 
 
-    run([
-        "python",
-        "melody_clean_pro.py",
-        midi_file,
-        clean_mid
-    ])
-
-
-
-    if not os.path.exists(
-        clean_mid
-    ):
-
-        # fallback
-        shutil.copy(
-            midi_file,
+    run(
+        [
+            sys.executable,
+            "melody_clean_pro.py",
+            vocal_mid,
             clean_mid
-        )
+        ]
+    )
+
+
+    st.success(
+        "Melody Clean 完成"
+    )
 
 
 
-    # ===============================
-    # MIDI -> MusicXML
-    # ===============================
+    # ========================================================
+    # 4. MIDI -> MusicXML
+    # ========================================================
 
 
     st.subheader(
@@ -289,130 +283,127 @@ if upload:
     )
 
 
-    musicxml = os.path.join(
+    raw_xml = os.path.join(
         work,
         "raw.musicxml"
     )
 
 
-    run([
-        "python",
-        "midi_to_musicxml_clean.py",
-        clean_mid,
-        musicxml
-    ])
-
-
-
-    if not os.path.exists(
-        musicxml
-    ):
-
-        raise Exception(
-            "MusicXML 產生失敗"
-        )
-
+    run(
+        [
+            sys.executable,
+            "midi_to_musicxml_clean.py",
+            clean_mid,
+            raw_xml
+        ]
+    )
 
 
     st.success(
-        "MusicXML 完成"
+        "MusicXML 建立完成"
     )
 
 
 
-    # ===============================
-    # Final Quantize
-    # ===============================
+    # ========================================================
+    # 5. Jianpu Safe Fix
+    # ========================================================
 
 
     st.subheader(
-        "⏱ 5. Final Quantize"
+        "🛠 5. Jianpu Safe Fix"
     )
 
 
-    quantize_xml = os.path.join(
+    fixed_xml = os.path.join(
         work,
-        "quantize.musicxml"
+        "fixed.musicxml"
     )
 
 
-    run([
-        "python",
-        "final_quantize.py",
-        musicxml,
-        quantize_xml
-    ])
-
-
-
-    if not os.path.exists(
-        quantize_xml
-    ):
-
-        raise Exception(
-            "Quantize 失敗"
-        )
-
-
-
-    # ===============================
-    # Measure Check
-    # ===============================
-
-
-    st.subheader(
-        "🔍 6. Measure Check"
+    run(
+        [
+            sys.executable,
+            "jianpu_safe_fix.py",
+            raw_xml,
+            fixed_xml
+        ]
     )
-
-
-    run([
-        "python",
-        "check_measure.py",
-        quantize_xml
-    ])
-
-
-
-    # ===============================
-    # Jianpu Safe Fix
-    # ===============================
-
-
-    st.subheader(
-        "🛡 7. Jianpu Safe Fix MVP 2.2"
-    )
-
-
-    safe_xml = os.path.join(
-        work,
-        "safe.musicxml"
-    )
-
-
-    run([
-        "python",
-        "jianpu_safe_fix.py",
-        quantize_xml,
-        safe_xml
-    ])
-
-
-
-    if not os.path.exists(
-        safe_xml
-    ):
-
-        raise Exception(
-            "Safe Fix 失敗"
-        )
 
 
     st.success(
-        "Safe MusicXML 完成"
+        "Safe Fix 完成"
     )
- # ===============================
-    # MusicXML -> Jianpu LY
-    # ===============================
+
+
+
+    # ========================================================
+    # 6. Final Quantize
+    # ========================================================
+
+
+    st.subheader(
+        "⏱ Final Quantize"
+    )
+
+
+    final_xml = os.path.join(
+        work,
+        "final.musicxml"
+    )
+
+
+    run(
+        [
+            sys.executable,
+            "final_quantize.py",
+            fixed_xml,
+            final_xml
+        ]
+    )
+
+
+    st.success(
+        "Final MusicXML 完成"
+    )
+
+
+
+    # ========================================================
+    # 7. Measure Check
+    # ========================================================
+
+
+    st.subheader(
+        "📏 Measure Check"
+    )
+
+
+    run(
+        [
+            sys.executable,
+            "check_measure.py",
+            final_xml
+        ]
+    )
+
+
+    st.success(
+        "✅ 小節檢查完成"
+    )
+
+
+
+    # ========================================================
+    # Save path
+    # ========================================================
+
+
+    st.session_state["final_xml"] = final_xml
+    st.session_state["work"] = work
+ # ========================================================
+    # 8. MusicXML -> jianpu.ly
+    # ========================================================
 
 
     st.subheader(
@@ -420,23 +411,35 @@ if upload:
     )
 
 
-    run([
-        "python",
-        "-m",
-        "jianpu_ly",
-        safe_xml
-    ])
+    try:
+
+        run(
+            [
+                sys.executable,
+                "-m",
+                "jianpu_ly",
+                final_xml
+            ]
+        )
+
+
+    except Exception as e:
+
+        st.error(
+            "jianpu_ly 產生失敗"
+        )
+
+        st.code(
+            traceback.format_exc()
+        )
+
+        raise e
 
 
 
-    # ===============================
-    # 找 ly
-    # ===============================
-
-
-    st.subheader(
-        "🎼 9. LilyPond"
-    )
+    # ========================================================
+    # Find ly file
+    # ========================================================
 
 
     ly_files = []
@@ -449,70 +452,85 @@ if upload:
     ]
 
 
-    for path in search_paths:
+    for p in search_paths:
 
         ly_files.extend(
             glob.glob(
                 os.path.join(
-                    path,
+                    p,
                     "*.ly"
                 )
             )
         )
 
 
+
     if not ly_files:
 
         raise Exception(
-            "找不到 jianpu .ly"
+            "找不到 jianpu.ly"
         )
+
 
 
     ly_file = ly_files[-1]
 
 
     st.success(
-        f"LY:{ly_file}"
+        f"找到 LilyPond 檔案:\n{ly_file}"
     )
 
 
 
-    # ===============================
-    # LilyPond PDF
-    # ===============================
+    # ========================================================
+    # 9. LilyPond PDF
+    # ========================================================
 
 
-    run([
-        "lilypond",
-        ly_file
-    ])
+    st.subheader(
+        "📘 9. LilyPond PDF"
+    )
+
+
+    run(
+        [
+            "lilypond",
+            ly_file
+        ]
+    )
 
 
 
-    # ===============================
-    # 找 PDF
-    # ===============================
+    # ========================================================
+    # Find PDF
+    # ========================================================
 
 
     pdf_files = []
 
 
-    for path in search_paths:
-
-        pdf_files.extend(
-            glob.glob(
-                os.path.join(
-                    path,
-                    "*.pdf"
-                )
+    pdf_files.extend(
+        glob.glob(
+            os.path.join(
+                work,
+                "*.pdf"
             )
         )
+    )
+
+
+    pdf_files.extend(
+        glob.glob(
+            "*.pdf"
+        )
+    )
+
 
 
     if not pdf_files:
 
         raise Exception(
-            "PDF 產生失敗"
+            "找不到 PDF"
         )
 
 
@@ -526,9 +544,9 @@ if upload:
 
 
 
-    # ===============================
+    # ========================================================
     # Download
-    # ===============================
+    # ========================================================
 
 
     with open(
@@ -538,7 +556,7 @@ if upload:
 
 
         st.download_button(
-            label="📄 下載簡譜 PDF",
+            label="⬇️ 下載簡譜 PDF",
             data=f,
             file_name="jianpu.pdf",
             mime="application/pdf"
@@ -546,4 +564,14 @@ if upload:
 
 
 
-    st.balloons()
+    st.info(
+        f"""
+完成！
+
+工作目錄:
+{work}
+
+PDF:
+{pdf}
+"""
+    )
