@@ -1,372 +1,335 @@
-# midi_to_musicxml_clean.py
+# ============================================================
+# midi_to_musicxml_clean_v40_pro.py
 #
-# JianpuTool V33.1
+# JianpuTool Professional MVP 3.0
 #
-# Vocal AI Melody Filter
-# + Quantize Builder
+# Vocal MIDI -> MusicXML
 #
-# BasicPitch Vocal MIDI
-#        |
-#        v
-# Vocal Filter
-#        |
-#        v
-# Quantize
-#        |
-#        v
-# 4/4 Measure Builder
-#        |
-#        v
-# MusicXML
-
+# 流行歌曲旋律模式
+#
+# ============================================================
 
 import sys
-
-from music21 import converter
-from music21 import stream
-from music21 import note
-from music21 import meter
-from music21 import tempo
-from music21 import instrument
+import music21
 
 
-# =========================
-# Parameters
-# =========================
+# ============================================================
+# MIDI 讀取
+# ============================================================
 
-LOW_PITCH = 48
-HIGH_PITCH = 84
+def load_midi(path):
 
-MIN_DURATION = 0.12
+    print("讀取 MIDI...")
 
-MAX_JUMP = 12
+    midi = music21.converter.parse(path)
 
-
-# =========================
-# Quantize
-# =========================
-
-def quantize(value):
-
-    grid = 0.25
-
-    return round(
-        value / grid
-    ) * grid
+    return midi
 
 
 
-# =========================
-# Arguments
-# =========================
+# ============================================================
+# 找旋律
+# ============================================================
 
-if len(sys.argv) < 3:
+def extract_melody(score):
+
+
+    print("分析旋律...")
+
+
+    parts = score.parts
+
+
+    if len(parts) == 0:
+
+        return score
+
+
+
+    # 取最高音平均線
+    notes = []
+
+
+    for p in parts:
+
+
+        for n in p.recurse().notes:
+
+
+            notes.append(n)
+
+
 
     print(
-        "python midi_to_musicxml_clean.py input.mid output.musicxml"
-    )
-
-    exit()
-
-
-input_mid = sys.argv[1]
-output_xml = sys.argv[2]
-
-
-
-# =========================
-# Read MIDI
-# =========================
-
-print("讀取 MIDI...")
-
-
-midi = converter.parse(
-    input_mid
-)
-
-
-
-raw = []
-
-
-for n in midi.flatten().notes:
-
-    if not isinstance(n, note.Note):
-        continue
-
-
-    raw.append(
-        {
-            "pitch": n.pitch.midi,
-            "offset": float(n.offset),
-            "duration": float(
-                n.duration.quarterLength
-            )
-        }
+        "候選音符:",
+        len(notes)
     )
 
 
-print(
-    "原始音符:",
-    len(raw)
-)
 
+    # 依時間排序
 
-
-# =========================
-# Pitch Filter
-# =========================
-
-notes = []
-
-
-for n in raw:
-
-    if (
-        LOW_PITCH
-        <= n["pitch"]
-        <= HIGH_PITCH
-    ):
-
-        notes.append(n)
-
-
-print(
-    "音域篩選:",
-    len(notes)
-)
-
-
-
-# =========================
-# Duration Filter
-# =========================
-
-notes2 = []
-
-
-for n in notes:
-
-    if n["duration"] >= MIN_DURATION:
-
-        notes2.append(n)
-
-
-print(
-    "長度篩選:",
-    len(notes2)
-)
-
-
-
-# =========================
-# Sort
-# =========================
-
-notes2.sort(
-    key=lambda x:x["offset"]
-)
-
-
-
-# =========================
-# Melody Continuity
-# =========================
-
-melody = []
-
-
-for n in notes2:
-
-
-    if not melody:
-
-        melody.append(n)
-
-        continue
-
-
-
-    last = melody[-1]
-
-
-    jump = abs(
-        n["pitch"]
-        -
-        last["pitch"]
+    notes.sort(
+        key=lambda x:x.offset
     )
 
 
-    if jump <= MAX_JUMP:
-
-        melody.append(n)
+    return notes
 
 
 
-print(
-    "旋律連續:",
-    len(melody)
-)
+# ============================================================
+# Vocal Melody Filter
+# ============================================================
+
+def melody_filter(notes):
 
 
-
-# =========================
-# Phrase Merge
-# =========================
-
-merged = []
-
-
-for n in melody:
-
-
-    n["duration"] = quantize(
-        n["duration"]
+    print(
+        "Vocal Melody Filter..."
     )
 
 
-    if not merged:
-
-        merged.append(n)
-
-        continue
+    result=[]
 
 
+    last_time=-1
 
-    last = merged[-1]
 
 
-    same = (
-        last["pitch"]
-        ==
-        n["pitch"]
+    for n in notes:
+
+
+        pitch=n.pitch.midi
+
+
+        duration=n.duration.quarterLength
+
+
+
+        # 人聲範圍
+
+        if pitch < 35:
+            continue
+
+
+        if pitch > 100:
+            continue
+
+
+
+        # 去除極短雜訊
+
+        if duration < 0.08:
+            continue
+
+
+
+        # 避免完全重疊
+
+        if abs(
+            n.offset-last_time
+        ) < 0.03:
+
+            continue
+
+
+
+        result.append(
+            n
+        )
+
+
+        last_time=n.offset
+
+
+
+    print(
+        "保留旋律:",
+        len(result)
     )
 
 
-    distance = (
-        n["offset"]
-        -
-        (
-            last["offset"]
-            +
-            last["duration"]
+    return result
+
+
+
+# ============================================================
+# 建立 MusicXML
+# ============================================================
+
+def create_score(notes):
+
+
+    print(
+        "建立 MusicXML..."
+    )
+
+
+    score=music21.stream.Score()
+
+
+    part=music21.stream.Part()
+
+
+    part.append(
+        music21.meter.TimeSignature(
+            "4/4"
         )
     )
 
 
-    if same and distance <= 0.25:
+    # tempo
 
-
-        last["duration"] += n["duration"]
-
-
-    else:
-
-        merged.append(n)
-
-
-
-print(
-    "Phrase Merge:",
-    len(merged)
-)
-
-
-
-# =========================
-# Build Score
-# =========================
-
-print(
-    "建立 MusicXML..."
-)
-
-
-score = stream.Score()
-
-
-part = stream.Part()
-
-
-part.insert(
-    0,
-    instrument.Instrument(
-        "Vocal Melody"
-    )
-)
-
-
-part.append(
-    meter.TimeSignature("4/4")
-)
-
-
-part.insert(
-    0,
-    tempo.MetronomeMark(
-        number=80
-    )
-)
-
-
-
-current = 0
-
-
-
-for n in merged:
-
-
-    dur = n["duration"]
-
-
-    if dur <= 0:
-
-        continue
-
-
-
-    nn = note.Note(
-        n["pitch"]
+    part.append(
+        music21.tempo.MetronomeMark(
+            number=80
+        )
     )
 
 
-    nn.duration.quarterLength = dur
 
-
-    part.insert(
-        current,
-        nn
+    current_measure=music21.stream.Measure(
+        number=1
     )
 
 
-    current += dur
+    beat=0
 
 
 
-# =========================
-# Fill 4/4 Measures
-# =========================
-
-score.append(part)
+    for n in notes:
 
 
-# make measures
-
-score = score.makeMeasures(
-    inPlace=False
-)
+        new_note=music21.note.Note(
+            n.pitch
+        )
 
 
-score.write(
-    "musicxml",
-    fp=output_xml
-)
+        length=n.duration.quarterLength
+
+
+        # 避免超長
+
+        if length > 4:
+
+            length=4
 
 
 
-print(
-    "完成:",
-    output_xml
-)
+        new_note.duration.quarterLength=length
+
+
+
+        # 小節控制
+
+        if beat + length > 4:
+
+
+            current_measure.rightBarline = (
+                music21.bar.Barline(
+                    "regular"
+                )
+            )
+
+
+            part.append(
+                current_measure
+            )
+
+
+            current_measure=music21.stream.Measure(
+                number=current_measure.number+1
+            )
+
+
+            beat=0
+
+
+
+        current_measure.append(
+            new_note
+        )
+
+
+        beat += length
+
+
+
+    if len(current_measure.notes)>0:
+
+        part.append(
+            current_measure
+        )
+
+
+
+    score.append(
+        part
+    )
+
+
+    return score
+
+
+
+# ============================================================
+# Main
+# ============================================================
+
+def main():
+
+
+    if len(sys.argv)<3:
+
+
+        print(
+            "python midi_to_musicxml_clean_v40_pro.py input.mid output.musicxml"
+        )
+
+        return
+
+
+
+    inp=sys.argv[1]
+
+    out=sys.argv[2]
+
+
+
+    midi=load_midi(
+        inp
+    )
+
+
+    notes=extract_melody(
+        midi
+    )
+
+
+    notes=melody_filter(
+        notes
+    )
+
+
+    score=create_score(
+        notes
+    )
+
+
+    score.write(
+        "musicxml",
+        fp=out
+    )
+
+
+    print(
+        "完成:",
+        out
+    )
+
+
+
+if __name__=="__main__":
+
+    main()
