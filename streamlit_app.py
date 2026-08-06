@@ -1,31 +1,53 @@
 import streamlit as st
 import os
 import uuid
+import subprocess
+
 
 from vocal_separator import separate_vocal
-from pdf_generator import generate_pdf
+
 
 
 st.set_page_config(
-    page_title="JianpuTool Professional MVP 2.4",
+    page_title="JianpuTool AI 音樂助手",
     page_icon="🎵"
 )
 
 
 st.title(
-    "🎵 JianpuTool Professional MVP 2.4"
+"🎵 JianpuTool AI 音樂助手"
 )
+
+
+st.write(
+"""
+功能：
+
+🎤 人聲分離  
+🎵 AI抓旋律  
+📄 自動簡譜  
+🎹 MIDI輸出  
+🎼 PDF樂譜
+"""
+)
+
 
 
 file = st.file_uploader(
     "上傳 MP3/WAV",
-    ["mp3","wav"]
+    [
+        "mp3",
+        "wav"
+    ]
 )
+
 
 
 if file:
 
+
     job=str(uuid.uuid4())
+
 
     os.makedirs(
         job,
@@ -36,22 +58,34 @@ if file:
     input_file=f"{job}/input.wav"
 
 
-    with open(input_file,"wb") as f:
-        f.write(file.read())
+    with open(
+        input_file,
+        "wb"
+    ) as f:
+
+        f.write(
+            file.read()
+        )
 
 
     st.success(
-        "歌曲完成"
+        "歌曲上傳完成"
     )
 
 
+
     if st.button(
-        "開始製作簡譜"
+        "開始AI製作簡譜"
     ):
 
 
+
+        # -----------------
+        # Vocal Separation
+        # -----------------
+
         st.write(
-            "🎤 人聲分離"
+        "🎤 人聲分離"
         )
 
 
@@ -71,56 +105,118 @@ if file:
 
 
 
-        st.write(
-            "🎵 AI抓旋律"
+        st.audio(
+            vocal
         )
 
 
-        os.system(
-        f"""
-        python basicpitch_convert.py \
-        {vocal} \
-        {job}/melody.mid
-        """
-        )
 
-
+        # -----------------
+        # BasicPitch
+        # -----------------
 
         st.write(
-            "📄 MusicXML"
+        "🎵 AI抓旋律"
         )
 
 
-        os.system(
-        f"""
-        python midi_to_musicxml.py \
-        {job}/melody.mid \
-        {job}/score.musicxml
-        """
+        subprocess.run(
+        [
+        "python",
+        "basicpitch_convert.py",
+        vocal,
+        f"{job}/melody.mid"
+        ],
+        check=True
         )
 
+
+
+        midi=f"{job}/melody.mid"
+
+
+
+        # -----------------
+        # MusicXML
+        # -----------------
 
         st.write(
-            "📕產生PDF"
+        "📄 自動簡譜"
         )
 
 
-        pdf=generate_pdf(
-            f"{job}/score.musicxml",
-            job
+        subprocess.run(
+        [
+        "python",
+        "midi_to_musicxml_clean_v42_pro.py",
+        midi,
+        f"{job}/score.musicxml"
+        ],
+        check=True
         )
+
+
+
+        # -----------------
+        # Jianpu
+        # -----------------
+
+        st.write(
+        "🎼 產生PDF"
+        )
+
+
+        subprocess.run(
+        [
+        "python",
+        "jianpu_pdf.py",
+        f"{job}/score.musicxml",
+        job
+        ],
+        check=True
+        )
+
+
+
+        pdf=f"{job}/jianpu.pdf"
+
 
 
         st.success(
-            "完成"
+        "🎉 完成"
         )
 
 
-        with open(pdf,"rb") as f:
 
-            st.download_button(
-                "📕下載簡譜PDF",
-                f,
-                file_name="jianpu.pdf",
-                mime="application/pdf"
-            )
+        # download
+
+
+        if os.path.exists(pdf):
+
+            with open(
+                pdf,
+                "rb"
+            ) as f:
+
+
+                st.download_button(
+                    "⬇下載簡譜PDF",
+                    f,
+                    "jianpu.pdf"
+                )
+
+
+
+        if os.path.exists(midi):
+
+            with open(
+                midi,
+                "rb"
+            ) as f:
+
+
+                st.download_button(
+                    "⬇下載MIDI",
+                    f,
+                    "melody.mid"
+                )
