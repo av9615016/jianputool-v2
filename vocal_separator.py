@@ -33,10 +33,9 @@ def separate_vocal(input_audio, output_dir):
 
     if result.returncode != 0:
 
-        raise Exception(
-            "Demucs失敗:\n" +
-            result.stdout
-        )
+        return {
+            "error": result.stdout
+        }
 
 
     vocal = os.path.join(
@@ -45,13 +44,6 @@ def separate_vocal(input_audio, output_dir):
         name,
         "vocals.wav"
     )
-
-
-    if not os.path.exists(vocal):
-
-        raise Exception(
-            f"找不到人聲檔:{vocal}"
-        )
 
 
     return vocal
