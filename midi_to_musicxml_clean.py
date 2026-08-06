@@ -1,14 +1,16 @@
 # ============================================================
-# midi_to_musicxml_clean_v42_pro.py
+# midi_to_musicxml_clean_v43_pro.py
 #
 # JianpuTool Professional
 #
 # Vocal MIDI -> MusicXML
 #
-# Fix V42:
-# Duration type error
+# Fix:
+#   measure > 4 beats
+#   jianpu_ly KeyError 8.75/9.25/9.5
 #
 # ============================================================
+
 
 import sys
 
@@ -16,18 +18,17 @@ from music21 import converter
 from music21 import stream
 from music21 import note
 from music21 import chord
-from music21 import duration
 from music21 import meter
 from music21 import tempo
-from music21 import bar
+from music21 import duration
 
 
 
 # ============================================================
-# Duration Fix
+# Duration
 # ============================================================
 
-def fix_duration(n, ql):
+def safe_duration(ql):
 
     if ql <= 0:
         ql = 0.25
@@ -37,8 +38,6 @@ def fix_duration(n, ql):
         ql
     )
 
-
-    # 強制讓 music21 產生 type
 
     if d.type is None:
 
@@ -58,94 +57,80 @@ def fix_duration(n, ql):
             d.type="16th"
 
 
-
-    n.duration = d
+    return d
 
 
 
 # ============================================================
-# Load
+# Extract MIDI
 # ============================================================
 
-def load_midi(path):
+def extract_notes(path):
+
 
     print("讀取 MIDI...")
 
-    return converter.parse(path)
+
+    midi = converter.parse(
+        path
+    )
+
+
+    notes=[]
+
+
+    for p in midi.parts:
+
+
+        for n in p.recurse().notes:
+
+
+            if isinstance(n,note.Note):
+
+                notes.append(n)
 
 
 
-# ============================================================
-# Extract
-# ============================================================
+            elif isinstance(n,chord.Chord):
 
-def extract_notes(score):
-
-    print("分析旋律...")
-
-
-    result=[]
-
-
-    for p in score.parts:
-
-
-        for x in p.recurse().notes:
-
-
-            if isinstance(
-                x,
-                note.Note
-            ):
-
-                result.append(x)
-
-
-
-            elif isinstance(
-                x,
-                chord.Chord
-            ):
-
-                # 和弦取最高音
 
                 top=max(
-                    x.pitches,
-                    key=lambda p:p.midi
+                    n.pitches,
+                    key=lambda x:x.midi
                 )
 
 
-                n=note.Note(
+                nn=note.Note(
                     top
                 )
 
 
-                n.offset=x.offset
+                nn.offset=n.offset
 
-                n.duration=x.duration
-
-
-                result.append(n)
+                nn.duration=n.duration
 
 
+                notes.append(nn)
 
-    result.sort(
-        key=lambda n:n.offset
+
+
+    notes.sort(
+        key=lambda x:x.offset
     )
 
 
     print(
         "候選音符:",
-        len(result)
+        len(notes)
     )
 
 
-    return result
+    return notes
 
 
 
 # ============================================================
-# Melody Preserve
+# Preserve Vocal
 # ============================================================
 
 def melody_filter(notes):
@@ -156,11 +141,10 @@ def melody_filter(notes):
     )
 
 
-    out=[]
+    result=[]
 
 
-    last_offset=-1
-    last_pitch=-1
+    last=-1
 
 
 
@@ -169,13 +153,11 @@ def melody_filter(notes):
 
         p=n.pitch.midi
 
-        ql=float(
+
+        q=float(
             n.duration.quarterLength
         )
 
-
-
-        # 人聲範圍
 
         if p < 30:
             continue
@@ -185,53 +167,42 @@ def melody_filter(notes):
             continue
 
 
-
-        # 移除極短雜訊
-
-        if ql < 0.05:
+        if q < 0.05:
             continue
 
 
 
-        # 完全重複
-
-        if (
-            p==last_pitch
-            and
-            abs(n.offset-last_offset)<0.001
-        ):
+        if p==last:
 
             continue
 
 
+        result.append(n)
 
-        out.append(n)
 
-
-        last_pitch=p
-        last_offset=n.offset
+        last=p
 
 
 
     print(
         "保留旋律:",
-        len(out)
+        len(result)
     )
 
 
-    return out
+    return result
 
 
 
 # ============================================================
-# Build Score
+# Create strict 4/4
 # ============================================================
 
-def create_score(notes):
+def build_score(notes):
 
 
     print(
-        "建立 4/4 MusicXML..."
+        "建立嚴格4/4 MusicXML..."
     )
 
 
@@ -239,7 +210,6 @@ def create_score(notes):
 
 
     part=stream.Part()
-
 
 
     part.append(
@@ -257,11 +227,8 @@ def create_score(notes):
 
 
 
-    measure_no=1
-
-
-    m=stream.Measure(
-        number=measure_no
+    measure=stream.Measure(
+        number=1
     )
 
 
@@ -277,27 +244,15 @@ def create_score(notes):
         )
 
 
-        if remain<=0:
-
-            remain=0.25
+        while remain > 0:
 
 
-
-        if remain>4:
-
-            remain=4
-
-
-
-        while remain>0:
-
-
-            space=4-beat
+            available=4-beat
 
 
             use=min(
                 remain,
-                space
+                available
             )
 
 
@@ -307,17 +262,14 @@ def create_score(notes):
             )
 
 
-            fix_duration(
-                n,
+            n.duration=safe_duration(
                 use
             )
 
 
-
-            m.append(
+            measure.append(
                 n
             )
-
 
 
             beat += use
@@ -326,24 +278,19 @@ def create_score(notes):
 
 
 
-            if beat >= 4-0.001:
+            # 滿4拍立即換小節
 
-
-                m.rightBarline=bar.Barline(
-                    "regular"
-                )
+            if beat >= 3.999:
 
 
                 part.append(
-                    m
+                    measure
                 )
 
 
-                measure_no +=1
-
-
-                m=stream.Measure(
-                    number=measure_no
+                measure=stream.Measure(
+                    number=
+                    measure.number+1
                 )
 
 
@@ -351,11 +298,15 @@ def create_score(notes):
 
 
 
-    if len(m.notes)>0:
+    if len(
+        measure.notes
+    )>0:
+
 
         part.append(
-            m
+            measure
         )
+
 
 
     score.append(
@@ -368,47 +319,10 @@ def create_score(notes):
 
 
 # ============================================================
-# Extra Safety
-# ============================================================
-
-def force_all_duration(score):
-
-
-    for n in score.recurse().notes:
-
-
-        q=float(
-            n.duration.quarterLength
-        )
-
-
-        fix_duration(
-            n,
-            q
-        )
-
-
-
-# ============================================================
 # Save
 # ============================================================
 
 def save(score,out):
-
-
-    print(
-        "修正 Duration..."
-    )
-
-
-    force_all_duration(
-        score
-    )
-
-
-    score.makeNotation(
-        inPlace=True
-    )
 
 
     print(
@@ -435,28 +349,25 @@ def save(score,out):
 
 def main():
 
+
     if len(sys.argv)<3:
 
         print(
-            "usage: python midi_to_musicxml_clean_v42_pro.py input.mid output.musicxml"
+            "python midi_to_musicxml_clean_v43_pro.py input.mid output.musicxml"
         )
 
         return
 
 
 
-    inp=sys.argv[1]
+    midi=sys.argv[1]
 
-    out=sys.argv[2]
+    xml=sys.argv[2]
 
-
-    score=load_midi(
-        inp
-    )
 
 
     notes=extract_notes(
-        score
+        midi
     )
 
 
@@ -465,14 +376,14 @@ def main():
     )
 
 
-    xml=create_score(
+    score=build_score(
         notes
     )
 
 
     save(
-        xml,
-        out
+        score,
+        xml
     )
 
 
