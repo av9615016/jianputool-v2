@@ -1,18 +1,18 @@
 # ============================================================
-# midi_to_musicxml_clean_v43_pro.py
+# midi_to_musicxml_clean.py
 #
-# JianpuTool Professional
+# JianpuTool MVP 1.1
 #
-# Vocal MIDI -> MusicXML
+# MIDI -> MusicXML
 #
-# Fix:
-#   measure > 4 beats
-#   jianpu_ly KeyError 8.75/9.25/9.5
+# FIX:
+# output argument is FILE, not directory
 #
 # ============================================================
 
 
 import sys
+import os
 
 from music21 import converter
 from music21 import stream
@@ -20,374 +20,207 @@ from music21 import note
 from music21 import chord
 from music21 import meter
 from music21 import tempo
-from music21 import duration
 
 
 
-# ============================================================
-# Duration
-# ============================================================
-
-def safe_duration(ql):
-
-    if ql <= 0:
-        ql = 0.25
-
-
-    d = duration.Duration(
-        ql
-    )
-
-
-    if d.type is None:
-
-        if ql >= 4:
-            d.type="whole"
-
-        elif ql >= 2:
-            d.type="half"
-
-        elif ql >= 1:
-            d.type="quarter"
-
-        elif ql >= 0.5:
-            d.type="eighth"
-
-        else:
-            d.type="16th"
-
-
-    return d
+print("================ MIDI TO MUSICXML CLEAN ================")
 
 
 
-# ============================================================
-# Extract MIDI
-# ============================================================
+# ------------------------------------------------------------
+# Arguments
+# ------------------------------------------------------------
 
-def extract_notes(path):
-
-
-    print("讀取 MIDI...")
-
-
-    midi = converter.parse(
-        path
-    )
-
-
-    notes=[]
-
-
-    for p in midi.parts:
-
-
-        for n in p.recurse().notes:
-
-
-            if isinstance(n,note.Note):
-
-                notes.append(n)
-
-
-
-            elif isinstance(n,chord.Chord):
-
-
-                top=max(
-                    n.pitches,
-                    key=lambda x:x.midi
-                )
-
-
-                nn=note.Note(
-                    top
-                )
-
-
-                nn.offset=n.offset
-
-                nn.duration=n.duration
-
-
-                notes.append(nn)
-
-
-
-    notes.sort(
-        key=lambda x:x.offset
-    )
-
+if len(sys.argv) < 3:
 
     print(
-        "候選音符:",
-        len(notes)
+        "Usage:"
     )
-
-
-    return notes
-
-
-
-# ============================================================
-# Preserve Vocal
-# ============================================================
-
-def melody_filter(notes):
-
 
     print(
-        "Vocal Melody Preserve..."
+        "python midi_to_musicxml_clean.py input.mid output.musicxml"
+    )
+
+    sys.exit(1)
+
+
+
+midi_file = sys.argv[1]
+output_file = sys.argv[2]
+
+
+
+if not os.path.isfile(midi_file):
+
+    raise Exception(
+        f"MIDI not found: {midi_file}"
     )
 
 
-    result=[]
+
+# ------------------------------------------------------------
+# Output folder
+# ------------------------------------------------------------
+
+output_dir = os.path.dirname(
+    output_file
+)
 
 
-    last=-1
+if output_dir:
+
+    os.makedirs(
+        output_dir,
+        exist_ok=True
+    )
 
 
 
-    for n in notes:
+# ------------------------------------------------------------
+# Read MIDI
+# ------------------------------------------------------------
+
+print("讀取 MIDI...")
 
 
-        p=n.pitch.midi
+score = converter.parse(
+    midi_file
+)
 
 
-        q=float(
-            n.duration.quarterLength
+
+# ------------------------------------------------------------
+# Find melody part
+# ------------------------------------------------------------
+
+print("取得 Piano Part...")
+
+
+parts = score.parts
+
+
+if len(parts) > 0:
+
+    part = parts[0]
+
+else:
+
+    part = score
+
+
+
+# ------------------------------------------------------------
+# Extract notes
+# ------------------------------------------------------------
+
+print("抽取旋律...")
+
+
+melody = stream.Part()
+
+
+melody.append(
+    meter.TimeSignature("4/4")
+)
+
+
+
+# tempo
+
+melody.append(
+    tempo.MetronomeMark(
+        number=84
+    )
+)
+
+
+
+for element in part.recurse():
+
+    if isinstance(
+        element,
+        note.Note
+    ):
+
+        n = note.Note(
+            element.pitch
+        )
+
+        n.duration = element.duration
+
+        melody.append(
+            n
         )
 
 
-        if p < 30:
-            continue
+    elif isinstance(
+        element,
+        chord.Chord
+    ):
 
+        # 取最高音當旋律
 
-        if p > 108:
-            continue
-
-
-        if q < 0.05:
-            continue
-
-
-
-        if p==last:
-
-            continue
-
-
-        result.append(n)
-
-
-        last=p
-
-
-
-    print(
-        "保留旋律:",
-        len(result)
-    )
-
-
-    return result
-
-
-
-# ============================================================
-# Create strict 4/4
-# ============================================================
-
-def build_score(notes):
-
-
-    print(
-        "建立嚴格4/4 MusicXML..."
-    )
-
-
-    score=stream.Score()
-
-
-    part=stream.Part()
-
-
-    part.append(
-        meter.TimeSignature(
-            "4/4"
-        )
-    )
-
-
-    part.append(
-        tempo.MetronomeMark(
-            number=80
-        )
-    )
-
-
-
-    measure=stream.Measure(
-        number=1
-    )
-
-
-    beat=0
-
-
-
-    for src in notes:
-
-
-        remain=float(
-            src.duration.quarterLength
+        n = note.Note(
+            element.sortAscending().notes[-1].pitch
         )
 
+        n.duration = element.duration
 
-        while remain > 0:
-
-
-            available=4-beat
-
-
-            use=min(
-                remain,
-                available
-            )
-
-
-
-            n=note.Note(
-                src.pitch
-            )
-
-
-            n.duration=safe_duration(
-                use
-            )
-
-
-            measure.append(
-                n
-            )
-
-
-            beat += use
-
-            remain -= use
-
-
-
-            # 滿4拍立即換小節
-
-            if beat >= 3.999:
-
-
-                part.append(
-                    measure
-                )
-
-
-                measure=stream.Measure(
-                    number=
-                    measure.number+1
-                )
-
-
-                beat=0
-
-
-
-    if len(
-        measure.notes
-    )>0:
-
-
-        part.append(
-            measure
+        melody.append(
+            n
         )
 
 
 
-    score.append(
-        part
-    )
+# ------------------------------------------------------------
+# Build score
+# ------------------------------------------------------------
+
+print("建立4/4小節...")
 
 
-    return score
+out_score = stream.Score()
 
 
-
-# ============================================================
-# Save
-# ============================================================
-
-def save(score,out):
-
-
-    print(
-        "輸出 MusicXML..."
-    )
-
-
-    score.write(
-        "musicxml",
-        fp=out
-    )
-
-
-    print(
-        "完成:",
-        out
-    )
+out_score.insert(
+    0,
+    melody
+)
 
 
 
-# ============================================================
-# Main
-# ============================================================
+# ------------------------------------------------------------
+# Remove bad durations
+# ------------------------------------------------------------
 
-def main():
+for n in melody.notes:
 
+    if n.duration.quarterLength <= 0:
 
-    if len(sys.argv)<3:
-
-        print(
-            "python midi_to_musicxml_clean_v43_pro.py input.mid output.musicxml"
-        )
-
-        return
+        n.duration.quarterLength = 1
 
 
 
-    midi=sys.argv[1]
+# ------------------------------------------------------------
+# Export
+# ------------------------------------------------------------
 
-    xml=sys.argv[2]
-
-
-
-    notes=extract_notes(
-        midi
-    )
+print("輸出 MusicXML...")
 
 
-    notes=melody_filter(
-        notes
-    )
-
-
-    score=build_score(
-        notes
-    )
-
-
-    save(
-        score,
-        xml
-    )
+out_score.write(
+    "musicxml",
+    fp=output_file
+)
 
 
 
-if __name__=="__main__":
+print(
+    "完成:",
+    output_file
+)
 
-    main()
+
+print(
+    "========================================================"
+)
