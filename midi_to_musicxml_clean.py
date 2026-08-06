@@ -1,14 +1,16 @@
-# midi_to_musicxml_clean_v42.1_pro.py
+# midi_to_musicxml_clean_v42_2_pro.py
 #
 # JianpuTool
 # MIDI -> MusicXML
 #
-# V42.1 PRO
+# V42.2 PRO
+#
 # Fix:
-#   - jianpu_ly KeyError 11.0
-#   - anacrusis crash
-#   - invalid measure length
-#   - force 4/4
+# - jianpu_ly unexpected '}'
+# - invalid measure structure
+# - empty measure
+# - anacrusis
+# - force 4/4
 #
 
 import sys
@@ -22,104 +24,54 @@ from music21 import meter
 from music21 import tempo
 
 
-# ==========================
+# =========================
 # Quantize
-# ==========================
+# =========================
 
 def quantize(v):
 
-    # 16th note grid
     return round(v * 4) / 4
 
 
 
-# ==========================
-# Force 4/4
-# ==========================
+# =========================
+# Extract melody
+# =========================
 
-def force_44(score):
+def extract_melody(score):
 
-    ts = meter.TimeSignature("4/4")
+    result = []
 
-    for p in score.parts:
-
-        for m in p.getElementsByClass("Measure"):
-
-            m.timeSignature = copy.deepcopy(ts)
-
-    return score
-
-
-
-# ==========================
-# Remove anacrusis
-# ==========================
-
-def remove_anacrusis(score):
-
-    for p in score.parts:
-
-        measures = list(
-            p.getElementsByClass("Measure")
-        )
-
-        for i, m in enumerate(measures):
-
-            if i == 0:
-
-                m.paddingLeft = 0
-
-                try:
-                    m.padAsAnacrusis = False
-                except:
-                    pass
-
-
-    return score
-
-
-
-# ==========================
-# Melody extraction
-# ==========================
-
-def extract_melody(midi):
-
-    notes = []
-
-
-    for part in midi.parts:
+    for part in score.parts:
 
         for n in part.recurse():
 
             if isinstance(n, note.Note):
 
-                notes.append(n)
+                result.append(copy.deepcopy(n))
 
             elif isinstance(n, chord.Chord):
 
-                # 最高音當旋律
-
-                notes.append(
+                result.append(
                     note.Note(
                         max(n.pitches)
                     )
                 )
 
-
-    return notes
-
+    return result
 
 
-# ==========================
+
+# =========================
 # Build score
-# ==========================
+# =========================
 
-def build_musicxml(notes):
+def build_score(notes):
 
     score = stream.Score()
 
     part = stream.Part()
+
 
     part.insert(
         0,
@@ -143,24 +95,30 @@ def build_musicxml(notes):
 
     for n in notes:
 
-        ql = quantize(
+        q = quantize(
             n.duration.quarterLength
         )
 
 
-        if beat + ql > 4:
+        if q <= 0:
+            continue
 
-            # 補滿小節
 
-            rest = note.Rest()
+        if q > 4:
+            q = 4
 
-            rest.duration.quarterLength = (
-                4 - beat
-            )
 
-            if rest.duration.quarterLength > 0:
+        if beat + q > 4:
 
-                measure.append(rest)
+            remain = 4 - beat
+
+            if remain > 0:
+
+                r = note.Rest()
+
+                r.duration.quarterLength = remain
+
+                measure.append(r)
 
 
             part.append(measure)
@@ -173,17 +131,16 @@ def build_musicxml(notes):
             beat = 0
 
 
+
         new_note = copy.deepcopy(n)
 
-        new_note.duration.quarterLength = ql
+        new_note.duration.quarterLength = q
 
         measure.append(new_note)
 
-        beat += ql
+        beat += q
 
 
-
-    # 最後小節
 
     if beat < 4:
 
@@ -192,6 +149,7 @@ def build_musicxml(notes):
         r.duration.quarterLength = 4 - beat
 
         measure.append(r)
+
 
 
     part.append(measure)
@@ -203,11 +161,32 @@ def build_musicxml(notes):
 
 
 
-# ==========================
-# Clean measure
-# ==========================
+# =========================
+# Remove empty measures
+# =========================
 
-def clean_measure(score):
+def remove_empty_measures(score):
+
+    for p in score.parts:
+
+        for m in list(
+            p.getElementsByClass("Measure")
+        ):
+
+            if len(m.notes) == 0:
+
+                p.remove(m)
+
+
+    return score
+
+
+
+# =========================
+# Fix measure length
+# =========================
+
+def fix_measure_length(score):
 
     for p in score.parts:
 
@@ -216,27 +195,104 @@ def clean_measure(score):
             length = m.duration.quarterLength
 
 
-            if length != 4:
+            if length < 4:
 
-                diff = 4 - length
+                r = note.Rest()
+
+                r.duration.quarterLength = 4 - length
+
+                m.append(r)
 
 
-                if diff > 0:
+            elif length > 4:
 
-                    r = note.Rest()
+                while m.duration.quarterLength > 4:
 
-                    r.duration.quarterLength = diff
+                    if len(m.notes):
 
-                    m.append(r)
+                        m.pop()
+
+
+                    else:
+
+                        break
 
 
     return score
 
 
 
-# ==========================
+# =========================
+# Remove anacrusis
+# =========================
+
+def remove_anacrusis(score):
+
+    for p in score.parts:
+
+        for m in p.getElementsByClass("Measure"):
+
+            try:
+
+                m.padAsAnacrusis = False
+
+            except:
+
+                pass
+
+
+    return score
+
+
+
+# =========================
+# Force 4/4
+# =========================
+
+def force_44(score):
+
+    ts = meter.TimeSignature(
+        "4/4"
+    )
+
+
+    for p in score.parts:
+
+        for m in p.getElementsByClass("Measure"):
+
+            m.timeSignature = copy.deepcopy(ts)
+
+
+    return score
+
+
+
+# =========================
+# Remove invalid rests
+# =========================
+
+def clean_rests(score):
+
+    for p in score.parts:
+
+        for m in p.getElementsByClass("Measure"):
+
+            for r in list(
+                m.recurse().getElementsByClass(note.Rest)
+            ):
+
+                if r.duration.quarterLength <= 0:
+
+                    m.remove(r)
+
+
+    return score
+
+
+
+# =========================
 # Main
-# ==========================
+# =========================
 
 def main():
 
@@ -247,10 +303,11 @@ def main():
         )
 
         print(
-            "python midi_to_musicxml_clean_v42.1_pro.py input.mid output.musicxml"
+            "python midi_to_musicxml_clean_v42_2_pro.py input.mid output.musicxml"
         )
 
         sys.exit(1)
+
 
 
     midi_file = sys.argv[1]
@@ -260,14 +317,14 @@ def main():
 
     print("讀取 MIDI...")
 
+
     midi = converter.parse(
         midi_file
     )
 
 
-    print(
-        "抽取旋律..."
-    )
+    print("抽取旋律...")
+
 
     notes = extract_melody(
         midi
@@ -285,17 +342,21 @@ def main():
     )
 
 
-    score = build_musicxml(
+    score = build_score(
         notes
     )
 
 
     print(
-        "修正拍號..."
+        "MusicXML 安全修正..."
     )
 
 
-    score = clean_measure(score)
+    score = remove_empty_measures(score)
+
+    score = clean_rests(score)
+
+    score = fix_measure_length(score)
 
     score = remove_anacrusis(score)
 
