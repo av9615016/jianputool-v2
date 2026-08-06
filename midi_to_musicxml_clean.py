@@ -1,82 +1,234 @@
-# midi_to_musicxml_clean_v42_2_pro.py
+# ==========================================================
+# midi_to_musicxml_clean_v42_3_pro.py
 #
-# JianpuTool
-# MIDI -> MusicXML
+# JianpuTool Professional
 #
-# V42.2 PRO
+# MIDI Vocal Melody
+# -> Clean Melody
+# -> MusicXML
 #
-# Fix:
-# - jianpu_ly unexpected '}'
-# - invalid measure structure
-# - empty measure
-# - anacrusis
-# - force 4/4
+# V42.3 PRO
 #
+# ==========================================================
+
 
 import sys
+import os
 import copy
 
 from music21 import converter
 from music21 import stream
 from music21 import note
-from music21 import chord
 from music21 import meter
 from music21 import tempo
+from music21 import key
 
 
-# =========================
-# Quantize
-# =========================
+# ==========================================================
+# CONFIG
+# ==========================================================
 
-def quantize(v):
+MIN_PITCH = 45
+MAX_PITCH = 90
 
-    return round(v * 4) / 4
+MIN_DURATION = 0.15
+
+MERGE_GAP = 0.08
+
+
+# ==========================================================
+# LOAD MIDI
+# ==========================================================
+
+def load_midi(path):
+
+    print("讀取 MIDI...")
+
+    midi = converter.parse(path)
+
+    return midi
 
 
 
-# =========================
-# Extract melody
-# =========================
+# ==========================================================
+# EXTRACT NOTES
+# ==========================================================
 
-def extract_melody(score):
+def extract_notes(midi):
 
-    result = []
+    print("抽取旋律...")
 
-    for part in score.parts:
 
-        for n in part.recurse():
+    notes=[]
 
-            if isinstance(n, note.Note):
 
-                result.append(copy.deepcopy(n))
+    for n in midi.flatten().notes:
 
-            elif isinstance(n, chord.Chord):
+        if not isinstance(n, note.Note):
+            continue
 
-                result.append(
-                    note.Note(
-                        max(n.pitches)
-                    )
-                )
+
+        pitch=n.pitch.midi
+
+
+        dur=n.duration.quarterLength
+
+
+        notes.append({
+
+            "pitch":pitch,
+            "offset":n.offset,
+            "duration":dur
+
+        })
+
+
+    print("原始音符:",len(notes))
+
+    return notes
+
+
+
+# ==========================================================
+# RANGE FILTER
+# ==========================================================
+
+def filter_range(notes):
+
+    result=[]
+
+
+    for n in notes:
+
+        if MIN_PITCH <= n["pitch"] <= MAX_PITCH:
+
+            if n["duration"] >= MIN_DURATION:
+
+                result.append(n)
+
+
+    print(
+        "音域/長度保留:",
+        len(result)
+    )
+
 
     return result
 
 
 
-# =========================
-# Build score
-# =========================
+# ==========================================================
+# REMOVE DUPLICATE
+# ==========================================================
 
-def build_score(notes):
+def remove_duplicate(notes):
 
-    score = stream.Score()
-
-    part = stream.Part()
+    result=[]
 
 
-    part.insert(
-        0,
-        meter.TimeSignature("4/4")
+    last=None
+
+
+    for n in notes:
+
+
+        key=(
+            n["pitch"],
+            round(n["offset"],3)
+        )
+
+
+        if key!=last:
+
+            result.append(n)
+
+            last=key
+
+
+    print(
+        "去除重複:",
+        len(result)
     )
+
+
+    return result
+
+
+
+# ==========================================================
+# MERGE PHRASE
+# ==========================================================
+
+def merge_phrase(notes):
+
+
+    if not notes:
+        return []
+
+
+    result=[]
+
+
+    current=copy.deepcopy(notes[0])
+
+
+    for n in notes[1:]:
+
+
+        end=current["offset"]+current["duration"]
+
+
+        gap=n["offset"]-end
+
+
+        if (
+            n["pitch"]==current["pitch"]
+            and gap <= MERGE_GAP
+        ):
+
+            current["duration"] += (
+                gap+n["duration"]
+            )
+
+
+        else:
+
+            result.append(current)
+
+            current=copy.deepcopy(n)
+
+
+
+    result.append(current)
+
+
+
+    print(
+        "Phrase Merge:",
+        len(result)
+    )
+
+
+    return result
+
+
+
+
+# ==========================================================
+# CREATE MUSICXML
+# ==========================================================
+
+def create_musicxml(notes,outfile):
+
+
+    print("建立 MusicXML...")
+
+
+    score=stream.Score()
+
+
+    part=stream.Part()
+
 
     part.insert(
         0,
@@ -86,302 +238,123 @@ def build_score(notes):
     )
 
 
-    measure = stream.Measure()
+    part.insert(
+        0,
+        key.Key("C")
+    )
 
-    measure.number = 1
 
-    beat = 0
+    part.insert(
+        0,
+        meter.TimeSignature("4/4")
+    )
 
 
     for n in notes:
 
-        q = quantize(
-            n.duration.quarterLength
+
+        nn=note.Note(
+            n["pitch"]
         )
 
 
-        if q <= 0:
-            continue
+        nn.duration.quarterLength = (
+            min(
+                n["duration"],
+                4
+            )
+        )
 
 
-        if q > 4:
-            q = 4
+        part.append(nn)
 
 
-        if beat + q > 4:
-
-            remain = 4 - beat
-
-            if remain > 0:
-
-                r = note.Rest()
-
-                r.duration.quarterLength = remain
-
-                measure.append(r)
-
-
-            part.append(measure)
-
-
-            measure = stream.Measure()
-
-            measure.number += 1
-
-            beat = 0
-
-
-
-        new_note = copy.deepcopy(n)
-
-        new_note.duration.quarterLength = q
-
-        measure.append(new_note)
-
-        beat += q
-
-
-
-    if beat < 4:
-
-        r = note.Rest()
-
-        r.duration.quarterLength = 4 - beat
-
-        measure.append(r)
-
-
-
-    part.append(measure)
 
     score.append(part)
 
 
-    return score
 
-
-
-# =========================
-# Remove empty measures
-# =========================
-
-def remove_empty_measures(score):
+    # safety
 
     for p in score.parts:
 
-        for m in list(
-            p.getElementsByClass("Measure")
+        for m in p.getElementsByClass(
+            stream.Measure
         ):
 
-            if len(m.notes) == 0:
+            if m.duration.quarterLength == 0:
 
-                p.remove(m)
-
-
-    return score
-
-
-
-# =========================
-# Fix measure length
-# =========================
-
-def fix_measure_length(score):
-
-    for p in score.parts:
-
-        for m in p.getElementsByClass("Measure"):
-
-            length = m.duration.quarterLength
+                m.insert(
+                    0,
+                    note.Rest(
+                        quarterLength=4
+                    )
+                )
 
 
-            if length < 4:
-
-                r = note.Rest()
-
-                r.duration.quarterLength = 4 - length
-
-                m.append(r)
-
-
-            elif length > 4:
-
-                while m.duration.quarterLength > 4:
-
-                    if len(m.notes):
-
-                        m.pop()
-
-
-                    else:
-
-                        break
-
-
-    return score
-
-
-
-# =========================
-# Remove anacrusis
-# =========================
-
-def remove_anacrusis(score):
-
-    for p in score.parts:
-
-        for m in p.getElementsByClass("Measure"):
-
-            try:
-
-                m.padAsAnacrusis = False
-
-            except:
-
-                pass
-
-
-    return score
-
-
-
-# =========================
-# Force 4/4
-# =========================
-
-def force_44(score):
-
-    ts = meter.TimeSignature(
-        "4/4"
+    score.write(
+        "musicxml",
+        fp=outfile
     )
 
 
-    for p in score.parts:
-
-        for m in p.getElementsByClass("Measure"):
-
-            m.timeSignature = copy.deepcopy(ts)
-
-
-    return score
+    print(
+        "完成:",
+        outfile
+    )
 
 
 
-# =========================
-# Remove invalid rests
-# =========================
-
-def clean_rests(score):
-
-    for p in score.parts:
-
-        for m in p.getElementsByClass("Measure"):
-
-            for r in list(
-                m.recurse().getElementsByClass(note.Rest)
-            ):
-
-                if r.duration.quarterLength <= 0:
-
-                    m.remove(r)
-
-
-    return score
-
-
-
-# =========================
-# Main
-# =========================
+# ==========================================================
+# MAIN
+# ==========================================================
 
 def main():
 
-    if len(sys.argv) < 3:
+
+    if len(sys.argv)<3:
 
         print(
             "Usage:"
         )
 
         print(
-            "python midi_to_musicxml_clean_v42_2_pro.py input.mid output.musicxml"
+            "python midi_to_musicxml_clean_v42_3_pro.py input.mid output.musicxml"
         )
 
         sys.exit(1)
 
 
 
-    midi_file = sys.argv[1]
+    infile=sys.argv[1]
 
-    output = sys.argv[2]
-
-
-    print("讀取 MIDI...")
-
-
-    midi = converter.parse(
-        midi_file
-    )
-
-
-    print("抽取旋律...")
-
-
-    notes = extract_melody(
-        midi
-    )
-
-
-    print(
-        "旋律數:",
-        len(notes)
-    )
-
-
-    print(
-        "建立 MusicXML..."
-    )
-
-
-    score = build_score(
-        notes
-    )
-
-
-    print(
-        "MusicXML 安全修正..."
-    )
-
-
-    score = remove_empty_measures(score)
-
-    score = clean_rests(score)
-
-    score = fix_measure_length(score)
-
-    score = remove_anacrusis(score)
-
-    score = force_44(score)
+    outfile=sys.argv[2]
 
 
 
-    print(
-        "輸出 MusicXML..."
-    )
+    midi=load_midi(infile)
 
 
-    score.write(
-        "musicxml",
-        fp=output
-    )
+    notes=extract_notes(midi)
 
 
-    print(
-        "完成:",
-        output
+    notes=filter_range(notes)
+
+
+    notes=remove_duplicate(notes)
+
+
+    notes=merge_phrase(notes)
+
+
+
+    create_musicxml(
+        notes,
+        outfile
     )
 
 
 
-if __name__ == "__main__":
+if __name__=="__main__":
 
     main()
