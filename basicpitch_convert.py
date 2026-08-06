@@ -1,4 +1,6 @@
 print("NEW BASIC PITCH FILE")
+
+
 import sys
 import os
 import traceback
@@ -17,8 +19,9 @@ print(sys.version)
 print("=" * 60)
 
 
+
 # ==========================
-# Import BasicPitch
+# Test basic_pitch
 # ==========================
 
 try:
@@ -26,28 +29,48 @@ try:
     import basic_pitch
 
     print(
-        "basic_pitch:",
-        basic_pitch.__file__
+        "basic_pitch found:"
     )
 
-
-    from basic_pitch.inference import predict
-
-
     print(
-        "BasicPitch import OK"
+        basic_pitch.__file__
     )
 
 
 except Exception:
 
     print(
-        "BasicPitch import failed"
+        "basic_pitch import failed"
     )
 
     traceback.print_exc()
 
     sys.exit(1)
+
+
+
+try:
+
+    from basic_pitch.inference import predict
+
+    print(
+        "predict import OK"
+    )
+
+
+except Exception:
+
+    print(
+        "predict import failed"
+    )
+
+    traceback.print_exc()
+
+    sys.exit(1)
+
+
+
+print("=" * 60)
 
 
 
@@ -75,8 +98,6 @@ output_midi = sys.argv[2]
 
 
 
-print("=" * 60)
-
 print(
     "Input:",
     input_audio
@@ -87,14 +108,13 @@ print(
     output_midi
 )
 
-print("=" * 60)
-
 
 
 if not os.path.exists(input_audio):
 
     print(
-        "找不到音檔:",
+        "找不到輸入檔:"
+        ,
         input_audio
     )
 
@@ -102,7 +122,9 @@ if not os.path.exists(input_audio):
 
 
 
-# 建立輸出資料夾
+# ==========================
+# Output folder
+# ==========================
 
 output_dir = os.path.dirname(
     output_midi
@@ -118,13 +140,13 @@ if output_dir:
 
 
 # ==========================
-# BasicPitch Prediction
+# BasicPitch
 # ==========================
 
 try:
 
     print(
-        "開始 AI 分析..."
+        "開始 BasicPitch AI 分析..."
     )
 
 
@@ -146,7 +168,7 @@ try:
     print("=" * 60)
 
     print(
-        "完成:"
+        "完成 MIDI:"
     )
 
     print(
@@ -160,7 +182,7 @@ try:
 except Exception:
 
     print(
-        "BasicPitch 執行錯誤"
+        "BasicPitch 執行失敗"
     )
 
     traceback.print_exc()
