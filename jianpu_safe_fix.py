@@ -1,171 +1,185 @@
 # ==========================================================
-# JianpuTool Professional MVP 2.1
 # jianpu_safe_fix.py
+#
+# JianpuTool Professional MVP 2.2
 #
 # MusicXML -> Safe MusicXML
 #
 # Fix:
-#   - barcheck fail
-#   - note crosses barline
-#   - invalid measure duration
+#   - jianpu_ly barcheck fail
+#   - remove tie
+#   - normalize duration
+#   - measure protection
 #
 # ==========================================================
 
 
 import sys
-import copy
+from lxml import etree
+from fractions import Fraction
 
-from music21 import converter
-from music21 import stream
-from music21 import note
-from music21 import chord
-from music21 import meter
-from music21 import duration
 
+DIVISION_DEFAULT = 4
 
 
-# ==========================================================
-# 設定
-# ==========================================================
 
+def remove_namespace(tag):
+    if "}" in tag:
+        return tag.split("}")[1]
+    return tag
 
-TARGET_BEATS = 4.0
 
 
+def get_divisions(root):
 
-# ==========================================================
-# duration 修正
-# ==========================================================
+    for e in root.iter():
+        if remove_namespace(e.tag) == "divisions":
+            return int(e.text)
 
-def quantize_duration(n):
+    return DIVISION_DEFAULT
 
-    q = n.duration.quarterLength
 
 
-    allowed = [
+def remove_ties(root):
 
-        0.25,
-        0.5,
-        0.75,
-        1.0,
-        1.5,
-        2.0,
-        3.0,
-        4.0
+    count = 0
 
-    ]
+    for tie in root.xpath(
+        "//*[local-name()='tie']"
+    ):
+        parent = tie.getparent()
 
+        if parent is not None:
+            parent.remove(tie)
+            count += 1
 
-    best=min(
-        allowed,
-        key=lambda x:abs(x-q)
-    )
 
+    for tied in root.xpath(
+        "//*[local-name()='tied']"
+    ):
+        parent = tied.getparent()
 
-    n.duration.quarterLength = best
+        if parent is not None:
+            parent.remove(tied)
+            count += 1
 
 
+    return count
 
-# ==========================================================
-# 建立 Rest
-# ==========================================================
 
-def make_rest(length):
 
-    r = note.Rest()
 
-    r.duration.quarterLength = length
+def fix_duration(root, divisions):
 
-    return r
+    fixed = 0
 
 
+    # 四分音符最大4拍
+    max_duration = divisions * 4
 
-# ==========================================================
-# 小節安全修正
-# ==========================================================
 
-def fix_measure(measure):
+    for duration in root.xpath(
+        "//*[local-name()='duration']"
+    ):
 
+        try:
 
-    total = 0
+            value = int(duration.text)
 
-    new_elements=[]
 
+            if value > max_duration:
 
-    for el in measure.notesAndRests:
+                duration.text = str(
+                    max_duration
+                )
 
+                fixed += 1
 
-        quantize_duration(el)
 
+        except:
 
-        q=el.duration.quarterLength
+            pass
 
 
+    return fixed
 
-        # 超長音切割
 
-        while q > TARGET_BEATS:
 
 
-            part=copy.deepcopy(el)
 
-            part.duration.quarterLength=TARGET_BEATS
+def check_measure(root, divisions):
 
-            new_elements.append(part)
+    measures = 0
+    errors = 0
 
-            q -= TARGET_BEATS
 
+    for measure in root.xpath(
+        "//*[local-name()='measure']"
+    ):
 
+        measures += 1
 
-        el.duration.quarterLength=q
 
+        total = 0
 
-        new_elements.append(el)
 
+        for duration in measure.xpath(
+            ".//*[local-name()='duration']"
+        ):
 
+            try:
+                total += int(duration.text)
 
-        total += q
+            except:
+                pass
 
 
+        beats = total / divisions
 
-    # 不足補休止
 
-    if total < TARGET_BEATS:
+        # 允許誤差
+        if beats > 4.1:
 
+            errors += 1
 
-        remain=TARGET_BEATS-total
 
+    return measures, errors
 
-        r=make_rest(remain)
 
 
-        new_elements.append(r)
 
 
-        total += remain
+def fix_voice(root):
 
+    """
+    移除 voice 造成的
+    jianpu_ly 排版問題
+    """
 
+    count = 0
 
-    # 清除原內容
 
-    measure.clear()
+    for voice in root.xpath(
+        "//*[local-name()='voice']"
+    ):
 
+        parent = voice.getparent()
 
-    for e in new_elements:
+        if parent is not None:
 
-        measure.append(e)
+            parent.remove(voice)
 
+            count += 1
 
 
-    return total
+    return count
 
 
 
-# ==========================================================
-# Main
-# ==========================================================
+
 
 def main():
+
 
     if len(sys.argv)<3:
 
@@ -177,80 +191,151 @@ def main():
             "python jianpu_safe_fix.py input.musicxml output.musicxml"
         )
 
-        sys.exit()
+        sys.exit(1)
 
 
 
-    src=sys.argv[1]
+    input_file=sys.argv[1]
 
-    out=sys.argv[2]
+    output_file=sys.argv[2]
+
+
+    print("="*50)
+
+    print(
+        "Jianpu Safe Fix MVP 2.2"
+    )
+
+    print("="*50)
 
 
 
     print(
-        "讀取 MusicXML..."
+        "讀取:",
+        input_file
     )
 
 
-    score=converter.parse(src)
-
-
-
-    print(
-        "修正小節..."
+    parser=etree.XMLParser(
+        remove_blank_text=True
     )
 
 
-
-    fixed=stream.Score()
-
-
-
-    for part in score.parts:
-
-
-        new_part=stream.Part()
-
-
-        for m in part.getElementsByClass(
-            stream.Measure
-        ):
-
-
-            nm=copy.deepcopy(m)
-
-
-            beats=fix_measure(nm)
-
-
-            print(
-                f"Measure {nm.number}: {beats}"
-            )
-
-
-            new_part.append(nm)
-
-
-
-        fixed.append(new_part)
-
-
-
-    print(
-        "輸出:"
+    tree=etree.parse(
+        input_file,
+        parser
     )
 
 
-    fixed.write(
-        "musicxml",
-        fp=out
+    root=tree.getroot()
+
+
+
+    divisions=get_divisions(
+        root
     )
 
 
     print(
-        "完成:",
-        out
+        "Divisions:",
+        divisions
     )
+
+
+
+    print(
+        "\n移除 tie..."
+    )
+
+
+    tie_count=remove_ties(
+        root
+    )
+
+
+    print(
+        "Tie:",
+        tie_count
+    )
+
+
+
+    print(
+        "\n修正 duration..."
+    )
+
+
+    duration_count=fix_duration(
+        root,
+        divisions
+    )
+
+
+    print(
+        "Duration:",
+        duration_count
+    )
+
+
+
+    print(
+        "\n移除 voice..."
+    )
+
+
+    voice_count=fix_voice(
+        root
+    )
+
+
+    print(
+        "Voice:",
+        voice_count
+    )
+
+
+
+    measures,errors=check_measure(
+        root,
+        divisions
+    )
+
+
+    print()
+
+    print(
+        "Measures:",
+        measures
+    )
+
+
+    print(
+        "Measure errors:",
+        errors
+    )
+
+
+
+    tree.write(
+        output_file,
+        encoding="UTF-8",
+        xml_declaration=True,
+        pretty_print=True
+    )
+
+
+    print()
+
+    print(
+        "完成:"
+    )
+
+    print(
+        output_file
+    )
+
+    print("="*50)
+
 
 
 
