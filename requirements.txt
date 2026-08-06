@@ -1,14 +1,1 @@
-streamlit==1.37.1
-
-torch
-torchaudio
-torchcodec==0.15.0
-
-demucs==4.0.1
-
-basic-pitch==0.4.0
-music21==9.1.0
-jianpu-ly==1.872
-lxml
-numpy==1.26.4
-reportlab
+streamlit
