@@ -1,12 +1,9 @@
-# streamlit_app.py
-# JianpuTool Professional MVP 2.2.4
-# AI Vocal -> MIDI -> MusicXML -> Jianpu PDF
-
 import streamlit as st
 import os
 import sys
 import uuid
 import subprocess
+import shutil
 from pathlib import Path
 
 
@@ -15,14 +12,14 @@ from pathlib import Path
 # ==================================================
 
 st.set_page_config(
-    page_title="JianpuTool Professional MVP 2.2.4",
+    page_title="JianpuTool Professional MVP 2.2.5",
     page_icon="🎵",
     layout="centered"
 )
 
 
 st.title(
-    "🎵 JianpuTool Professional MVP 2.2.4"
+    "🎵 JianpuTool Professional MVP 2.2.5"
 )
 
 
@@ -49,6 +46,7 @@ MP3/WAV
 )
 
 
+
 # ==================================================
 # Path
 # ==================================================
@@ -67,25 +65,66 @@ PYTHON = sys.executable
 
 
 # ==================================================
-# Command
+# Find LilyPond
 # ==================================================
 
-def run_cmd(cmd, cwd=None):
+def find_lilypond():
+
+
+    candidates = [
+
+        "lilypond",
+
+        "/usr/bin/lilypond",
+
+        "/usr/local/bin/lilypond",
+
+        "C:/lilypond-2.26.0/bin/lilypond.exe"
+
+    ]
+
+
+    for p in candidates:
+
+        if shutil.which(p):
+
+            return p
+
+
+        if Path(p).exists():
+
+            return p
+
+
+    return None
+
+
+
+
+# ==================================================
+# Run command
+# ==================================================
+
+def run_cmd(cmd,cwd=None):
+
 
     st.code(
-        " ".join(
-            str(x)
-            for x in cmd
-        )
+        " ".join(str(x) for x in cmd)
     )
 
 
     result = subprocess.run(
+
         cmd,
+
         cwd=cwd,
+
         stdout=subprocess.PIPE,
+
         stderr=subprocess.STDOUT,
+
         text=True
+
     )
 
 
@@ -105,16 +144,20 @@ def run_cmd(cmd, cwd=None):
 
 
 
+
 # ==================================================
 # Upload
 # ==================================================
 
 upload = st.file_uploader(
+
     "上傳歌曲 MP3 / WAV",
+
     type=[
         "mp3",
         "wav"
     ]
+
 )
 
 
@@ -135,7 +178,9 @@ if upload:
     )
 
 
+
     input_file = job_dir / upload.name
+
 
 
     with open(
@@ -164,23 +209,39 @@ if upload:
 
 
     run_cmd(
+
         [
+
             PYTHON,
+
             "-m",
+
             "demucs",
+
             "--two-stems=vocals",
+
             "-n",
+
             "htdemucs",
+
             str(input_file)
+
         ],
+
         cwd=BASE_DIR
+
     )
 
 
+
     vocals = list(
+
         BASE_DIR.glob(
+
             "separated/htdemucs/**/vocals.wav"
+
         )
+
     )
 
 
@@ -194,9 +255,11 @@ if upload:
     vocal_wav = vocals[0]
 
 
+
     st.success(
         f"取得人聲: {vocal_wav}"
     )
+
 
 
 
@@ -213,14 +276,23 @@ if upload:
 
 
     run_cmd(
+
         [
+
             PYTHON,
-            str(BASE_DIR / "basicpitch_convert.py"),
+
+            str(BASE_DIR/"basicpitch_convert.py"),
+
             str(vocal_wav),
+
             str(vocal_mid)
+
         ],
+
         cwd=BASE_DIR
+
     )
+
 
 
     st.success(
@@ -238,25 +310,38 @@ if upload:
     )
 
 
-    vocal_clean = job_dir / "vocal_clean.mid"
+    vocal_clean = job_dir/"vocal_clean.mid"
+
 
 
     run_cmd(
+
         [
+
             PYTHON,
-            str(BASE_DIR / "melody_clean_pro.py"),
+
+            str(BASE_DIR/"melody_clean_pro.py"),
+
             str(vocal_mid),
+
             str(vocal_clean)
+
         ],
+
         cwd=BASE_DIR
+
     )
 
 
     st.success(
         "旋律清理完成"
     )
- # ==================================================
-    # 4 MIDI -> MusicXML
+
+
+
+
+    # ==================================================
+    # 4 MIDI XML
     # ==================================================
 
     st.subheader(
@@ -264,95 +349,107 @@ if upload:
     )
 
 
-    raw_xml = job_dir / "raw.musicxml"
+    raw_xml = job_dir/"raw.musicxml"
+
 
 
     run_cmd(
+
         [
+
             PYTHON,
+
             str(
-                BASE_DIR /
+                BASE_DIR/
                 "midi_to_musicxml_clean_v42_2_pro.py"
             ),
+
             str(vocal_clean),
+
             str(raw_xml)
+
         ],
+
         cwd=BASE_DIR
+
     )
+
 
 
     st.success(
-        "MusicXML 建立完成"
+        "MusicXML 完成"
     )
 
 
 
+
     # ==================================================
-    # 5 Jianpu Safe Fix
+    # 5 Safe Fix
     # ==================================================
+
+    fixed_xml = job_dir/"fixed.musicxml"
+
 
     st.subheader(
         "🛠 5. Jianpu Safe Fix"
     )
 
 
-    fixed_xml = job_dir / "fixed.musicxml"
-
-
     run_cmd(
+
         [
+
             PYTHON,
-            str(
-                BASE_DIR /
-                "jianpu_safe_fix.py"
-            ),
+
+            str(BASE_DIR/"jianpu_safe_fix.py"),
+
             str(raw_xml),
+
             str(fixed_xml)
+
         ],
+
         cwd=BASE_DIR
-    )
 
-
-    st.success(
-        "MusicXML 修正完成"
     )
 
 
 
     # ==================================================
-    # 6 Final Quantize
+    # 6 Quantize
     # ==================================================
+
+    final_xml = job_dir/"final.musicxml"
+
 
     st.subheader(
         "⏱ 6. Final Quantize"
     )
 
 
-    final_xml = job_dir / "final.musicxml"
-
-
     run_cmd(
+
         [
+
             PYTHON,
-            str(
-                BASE_DIR /
-                "final_quantize.py"
-            ),
+
+            str(BASE_DIR/"final_quantize.py"),
+
             str(fixed_xml),
+
             str(final_xml)
+
         ],
+
         cwd=BASE_DIR
+
     )
 
-
-    st.success(
-        "節奏量化完成"
-    )
 
 
 
     # ==================================================
-    # 7 Measure Check
+    # 7 Check
     # ==================================================
 
     st.subheader(
@@ -361,26 +458,26 @@ if upload:
 
 
     run_cmd(
+
         [
+
             PYTHON,
-            str(
-                BASE_DIR /
-                "check_measure.py"
-            ),
+
+            str(BASE_DIR/"check_measure.py"),
+
             str(final_xml)
+
         ],
+
         cwd=BASE_DIR
+
     )
 
-
-    st.success(
-        "小節檢查完成"
-    )
 
 
 
     # ==================================================
-    # 8 MusicXML -> Jianpu
+    # 8 Jianpu ly
     # ==================================================
 
     st.subheader(
@@ -388,47 +485,72 @@ if upload:
     )
 
 
-    run_cmd(
+    ly_file = job_dir/"jianpu.ly"
+
+
+
+    result = subprocess.run(
+
         [
+
             PYTHON,
+
             "-m",
+
             "jianpu_ly",
+
             str(final_xml)
+
         ],
-        cwd=str(job_dir)
+
+        cwd=job_dir,
+
+        stdout=subprocess.PIPE,
+
+        stderr=subprocess.PIPE,
+
+        text=True
+
     )
 
 
-    ly_candidates = list(
-        job_dir.glob(
-            "*.ly"
-        )
-    )
-
-
-    if not ly_candidates:
+    if result.returncode !=0:
 
         raise Exception(
-            "jianpu-ly 未產生 .ly\n\n"
-            "目前目錄:\n"
-            +
-            "\n".join(
-                os.listdir(job_dir)
-            )
+            result.stderr
         )
 
 
-    ly_file = ly_candidates[0]
+
+    with open(
+        ly_file,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        f.write(
+            result.stdout
+        )
+
+
+
+    if not ly_file.exists():
+
+        raise Exception(
+            "jianpu.ly 建立失敗"
+        )
+
 
 
     st.success(
-        f"找到 LilyPond: {ly_file}"
+        "jianpu.ly 完成"
     )
+
 
 
 
     # ==================================================
-    # 9 LilyPond PDF
+    # 9 LilyPond
     # ==================================================
 
     st.subheader(
@@ -436,41 +558,53 @@ if upload:
     )
 
 
-    run_cmd(
-        [
-            "lilypond",
-            "-o",
-            str(
-                job_dir / "jianpu"
-            ),
-            str(ly_file)
-        ],
-        cwd=str(job_dir)
-    )
+    lilypond = find_lilypond()
 
 
-
-    pdf_candidates = list(
-        job_dir.glob(
-            "*.pdf"
-        )
-    )
-
-
-    if not pdf_candidates:
+    if not lilypond:
 
         raise Exception(
-            "LilyPond 未產生 PDF"
+            "找不到 LilyPond"
         )
 
 
-    pdf_file = pdf_candidates[0]
+
+    run_cmd(
+
+        [
+
+            lilypond,
+
+            "-o",
+
+            str(job_dir/"jianpu"),
+
+            str(ly_file)
+
+        ],
+
+        cwd=str(job_dir)
+
+    )
+
+
+
+    pdf_file = job_dir/"jianpu.pdf"
+
+
+
+    if not pdf_file.exists():
+
+        raise Exception(
+            "PDF產生失敗"
+        )
 
 
 
     st.success(
         "🎉 簡譜 PDF 完成"
     )
+
 
 
 
@@ -485,10 +619,15 @@ if upload:
 
 
         st.download_button(
-            label="⬇️ 下載簡譜 PDF",
-            data=f,
+
+            "⬇️ 下載簡譜 PDF",
+
+            f,
+
             file_name="jianpu.pdf",
+
             mime="application/pdf"
+
         )
 
 
