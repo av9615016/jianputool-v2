@@ -1,16 +1,17 @@
 # ============================================================
-# melody_clean_pro.py
+# melody_clean_pro_v2.4.py
 #
-# JianpuTool Professional MVP 2.3
+# JianpuTool Professional
 #
 # BasicPitch MIDI
 #        |
 #        v
-# Melody Clean Pro
+# Melody Clean Pro v2.4
 #        |
 #        v
 # clean.mid
 #
+# 保留旋律版
 # ============================================================
 
 
@@ -20,49 +21,50 @@ from mido import MidiFile, MidiTrack, Message
 
 
 # ============================================================
-# 讀取 MIDI
+# MIDI Reader
 # ============================================================
 
-def read_notes(mid_file):
+def read_notes(filename):
 
     print("讀取 MIDI...")
 
 
-    mid = MidiFile(mid_file)
+    mid = MidiFile(filename)
 
 
     notes = []
 
-    current_time = 0
-
     active = {}
-
 
 
     for track in mid.tracks:
 
 
-        time = 0
+        current = 0
 
 
         for msg in track:
 
 
-            time += msg.time
+            current += msg.time
 
 
 
             if msg.type == "note_on" and msg.velocity > 0:
 
 
-                active[msg.note] = time
+                active[msg.note] = current
 
 
 
-            elif msg.type in [
-                "note_off",
-                "note_on"
-            ] and msg.velocity == 0:
+            elif (
+                msg.type == "note_off"
+                or
+                (
+                    msg.type == "note_on"
+                    and msg.velocity == 0
+                )
+            ):
 
 
                 if msg.note in active:
@@ -73,7 +75,7 @@ def read_notes(mid_file):
                     )
 
 
-                    end = time
+                    end = current
 
 
                     notes.append(
@@ -97,10 +99,10 @@ def read_notes(mid_file):
 
 
 # ============================================================
-# 音域 / 長度篩選
+# Vocal Range Filter
 # ============================================================
 
-def filter_notes(notes):
+def vocal_filter(notes):
 
 
     result = []
@@ -111,28 +113,28 @@ def filter_notes(notes):
 
         pitch = n["pitch"]
 
-
-        duration = (
+        length = (
             n["end"]
             -
             n["start"]
         )
 
 
-        # 人聲常用範圍
 
-        if pitch < 35:
+        # 放寬人聲範圍
+
+        if pitch < 30:
             continue
 
 
-        if pitch > 95:
+        if pitch > 100:
             continue
 
 
 
-        # 太短雜音
+        # 保留更多短音
 
-        if duration < 30:
+        if length < 10:
             continue
 
 
@@ -142,8 +144,9 @@ def filter_notes(notes):
         )
 
 
+
     print(
-        "音域/長度篩選:",
+        "音域/長度保留:",
         len(result)
     )
 
@@ -153,15 +156,82 @@ def filter_notes(notes):
 
 
 # ============================================================
-# 相鄰音符合併
+# Remove Duplicate Notes
 # ============================================================
 
-def merge_notes(notes):
+def remove_duplicate(notes):
 
 
-    if not notes:
-        return []
+    notes = sorted(
+        notes,
+        key=lambda x:(
+            x["start"],
+            x["pitch"]
+        )
+    )
 
+
+    result=[]
+
+
+    last=None
+
+
+    for n in notes:
+
+
+        if last:
+
+
+            if (
+                n["pitch"]
+                ==
+                last["pitch"]
+
+                and
+
+                abs(
+                    n["start"]
+                    -
+                    last["start"]
+                )
+                < 20
+            ):
+
+
+                if n["end"] > last["end"]:
+
+                    last["end"] = n["end"]
+
+
+                continue
+
+
+
+        result.append(
+            n
+        )
+
+
+        last=n
+
+
+
+    print(
+        "去除重複:",
+        len(result)
+    )
+
+
+    return result
+
+
+
+# ============================================================
+# Phrase Merge
+# ============================================================
+
+def phrase_merge(notes):
 
 
     notes = sorted(
@@ -170,11 +240,10 @@ def merge_notes(notes):
     )
 
 
-    result = []
+    result=[]
 
 
-    last = None
-
+    last=None
 
 
     for n in notes:
@@ -182,18 +251,30 @@ def merge_notes(notes):
 
         if last is None:
 
-            last = n
+            last=n
 
             continue
 
 
 
-        # 同音且接近
+        gap = (
+            n["start"]
+            -
+            last["end"]
+        )
+
+
+
+        # 同音小間隔合併
 
         if (
-            n["pitch"] == last["pitch"]
+            n["pitch"]
+            ==
+            last["pitch"]
+
             and
-            n["start"] - last["end"] < 50
+
+            gap < 20
         ):
 
 
@@ -210,7 +291,8 @@ def merge_notes(notes):
                 last
             )
 
-            last = n
+
+            last=n
 
 
 
@@ -221,9 +303,8 @@ def merge_notes(notes):
         )
 
 
-
     print(
-        "合併旋律:",
+        "Phrase Merge:",
         len(result)
     )
 
@@ -233,10 +314,10 @@ def merge_notes(notes):
 
 
 # ============================================================
-# 安全寫 MIDI
+# Safe MIDI Writer
 # ============================================================
 
-def write_midi(notes, out):
+def write_midi(notes, output):
 
 
     print(
@@ -256,9 +337,6 @@ def write_midi(notes, out):
     )
 
 
-
-    # ★重要：排序
-
     notes = sorted(
         notes,
         key=lambda x:(
@@ -268,45 +346,37 @@ def write_midi(notes, out):
     )
 
 
-
-    current_time = 0
+    current = 0
 
 
 
     for n in notes:
 
 
-        pitch = int(
+        pitch=int(
             n["pitch"]
         )
 
 
-        start = int(
-            max(
-                0,
-                n["start"]
-            )
+        start=max(
+            0,
+            int(n["start"])
         )
 
 
-        end = int(
-            max(
-                start + 1,
-                n["end"]
-            )
+        end=max(
+            start+1,
+            int(n["end"])
         )
 
 
 
-        delta = start - current_time
+        delta=start-current
 
-
-
-        # 防止負時間
 
         if delta < 0:
 
-            delta = 0
+            delta=0
 
 
 
@@ -314,7 +384,7 @@ def write_midi(notes, out):
             Message(
                 "note_on",
                 note=pitch,
-                velocity=80,
+                velocity=90,
                 time=delta
             )
         )
@@ -331,18 +401,18 @@ def write_midi(notes, out):
         )
 
 
-        current_time = end
+        current=end
 
 
 
     mid.save(
-        out
+        output
     )
 
 
     print(
         "完成:",
-        out
+        output
     )
 
 
@@ -354,48 +424,50 @@ def write_midi(notes, out):
 def main():
 
 
-    if len(sys.argv) < 3:
+    if len(sys.argv)<3:
+
 
         print(
-            "使用:"
-        )
-
-        print(
-            "python melody_clean_pro.py input.mid output.mid"
+            "python melody_clean_pro_v2.4.py input.mid output.mid"
         )
 
         return
 
 
 
-    input_mid = sys.argv[1]
+    inp=sys.argv[1]
 
-    output_mid = sys.argv[2]
+    out=sys.argv[2]
 
 
 
-    notes = read_notes(
-        input_mid
+    notes=read_notes(
+        inp
     )
 
 
-    notes = filter_notes(
+    notes=vocal_filter(
         notes
     )
 
 
-    notes = merge_notes(
+    notes=remove_duplicate(
+        notes
+    )
+
+
+    notes=phrase_merge(
         notes
     )
 
 
     write_midi(
         notes,
-        output_mid
+        out
     )
 
 
 
-if __name__ == "__main__":
+if __name__=="__main__":
 
     main()
