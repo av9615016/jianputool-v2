@@ -1,78 +1,167 @@
-import os
 import sys
-import pkgutil
+import os
 import traceback
 
+
 print("=" * 60)
-print("Python Executable:")
+print("BasicPitch Converter")
+print("=" * 60)
+
+print("Python:")
 print(sys.executable)
-print("=" * 60)
 
-print("Python Version:")
+print("Version:")
 print(sys.version)
+
 print("=" * 60)
 
-print("sys.path:")
-for p in sys.path:
-    print(p)
-print("=" * 60)
 
-print("Searching basic_pitch package...")
-print("Found:",
-      any(m.name == "basic_pitch" for m in pkgutil.iter_modules()))
-print("=" * 60)
+# ==========================
+# Import BasicPitch
+# ==========================
 
 try:
+
     import basic_pitch
-    print("basic_pitch imported OK")
-    print("Version:", getattr(basic_pitch, "__version__", "Unknown"))
-except Exception:
-    print("Failed to import basic_pitch")
-    traceback.print_exc()
-    sys.exit(1)
 
-try:
+    print(
+        "basic_pitch:",
+        basic_pitch.__file__
+    )
+
+
     from basic_pitch.inference import predict
-    print("predict imported OK")
+
+
+    print(
+        "BasicPitch import OK"
+    )
+
+
 except Exception:
-    print("Failed to import predict")
+
+    print(
+        "BasicPitch import failed"
+    )
+
     traceback.print_exc()
+
     sys.exit(1)
 
-try:
-    from basic_pitch.note_creation import model_output_to_notes
-    print("note_creation imported OK")
-except Exception:
-    print("Failed to import note_creation")
-    traceback.print_exc()
-    sys.exit(1)
 
-print("=" * 60)
+
+# ==========================
+# Arguments
+# ==========================
 
 if len(sys.argv) < 3:
-    print("Usage:")
-    print("python basicpitch_convert.py input.wav output.mid")
+
+    print(
+        "Usage:"
+    )
+
+    print(
+        "python basicpitch_convert.py input.wav output.mid"
+    )
+
     sys.exit(1)
 
+
+
 input_audio = sys.argv[1]
+
 output_midi = sys.argv[2]
 
-print("Input :", input_audio)
-print("Output:", output_midi)
 
-os.makedirs(os.path.dirname(output_midi), exist_ok=True)
+
+print("=" * 60)
+
+print(
+    "Input:",
+    input_audio
+)
+
+print(
+    "Output:",
+    output_midi
+)
+
+print("=" * 60)
+
+
+
+if not os.path.exists(input_audio):
+
+    print(
+        "找不到音檔:",
+        input_audio
+    )
+
+    sys.exit(1)
+
+
+
+# 建立輸出資料夾
+
+output_dir = os.path.dirname(
+    output_midi
+)
+
+if output_dir:
+
+    os.makedirs(
+        output_dir,
+        exist_ok=True
+    )
+
+
+
+# ==========================
+# BasicPitch Prediction
+# ==========================
 
 try:
-    model_output, midi_data, note_events = predict(input_audio)
 
-    midi_data.write(output_midi)
+    print(
+        "開始 AI 分析..."
+    )
 
-    print("======================================")
-    print("MIDI created successfully")
-    print(output_midi)
-    print("======================================")
+
+    model_output, midi_data, note_events = predict(
+        input_audio
+    )
+
+
+    print(
+        "寫入 MIDI..."
+    )
+
+
+    midi_data.write(
+        output_midi
+    )
+
+
+    print("=" * 60)
+
+    print(
+        "完成:"
+    )
+
+    print(
+        output_midi
+    )
+
+    print("=" * 60)
+
+
 
 except Exception:
-    print("Prediction failed")
+
+    print(
+        "BasicPitch 執行錯誤"
+    )
+
     traceback.print_exc()
+
     sys.exit(1)
