@@ -66,8 +66,9 @@ if file:
 
         if isinstance(vocal, dict):
 
-           st.error(
-             vocal["error"]
+           st.code(
+             vocal["error"],
+             language="text"
            )
 
            st.stop()
