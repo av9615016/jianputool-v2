@@ -1,9 +1,12 @@
+# streamlit_app.py
+# JianpuTool Professional MVP 2.2.4
+# AI Vocal -> MIDI -> MusicXML -> Jianpu PDF
+
 import streamlit as st
 import os
 import sys
 import uuid
 import subprocess
-import shutil
 from pathlib import Path
 
 
@@ -12,13 +15,16 @@ from pathlib import Path
 # ==================================================
 
 st.set_page_config(
-    page_title="JianpuTool Professional MVP 2.2.3",
+    page_title="JianpuTool Professional MVP 2.2.4",
     page_icon="🎵",
     layout="centered"
 )
 
 
-st.title("🎵 JianpuTool Professional MVP 2.2.3")
+st.title(
+    "🎵 JianpuTool Professional MVP 2.2.4"
+)
+
 
 st.write(
 """
@@ -59,15 +65,20 @@ OUTPUT_DIR.mkdir(
 PYTHON = sys.executable
 
 
+
 # ==================================================
-# Run command
+# Command
 # ==================================================
 
 def run_cmd(cmd, cwd=None):
 
     st.code(
-        " ".join(str(x) for x in cmd)
+        " ".join(
+            str(x)
+            for x in cmd
+        )
     )
+
 
     result = subprocess.run(
         cmd,
@@ -77,7 +88,11 @@ def run_cmd(cmd, cwd=None):
         text=True
     )
 
-    st.text(result.stdout)
+
+    st.text(
+        result.stdout
+    )
+
 
     if result.returncode != 0:
 
@@ -85,27 +100,8 @@ def run_cmd(cmd, cwd=None):
             result.stdout
         )
 
+
     return result.stdout
-
-
-
-# ==================================================
-# Find file
-# ==================================================
-
-def find_file(folder, ext):
-
-    folder = Path(folder)
-
-    files = list(
-        folder.glob(ext)
-    )
-
-    if len(files):
-
-        return files[0]
-
-    return None
 
 
 
@@ -122,6 +118,7 @@ upload = st.file_uploader(
 )
 
 
+
 if upload:
 
 
@@ -132,6 +129,7 @@ if upload:
 
     job_dir = OUTPUT_DIR / job_id
 
+
     job_dir.mkdir(
         exist_ok=True
     )
@@ -140,7 +138,10 @@ if upload:
     input_file = job_dir / upload.name
 
 
-    with open(input_file,"wb") as f:
+    with open(
+        input_file,
+        "wb"
+    ) as f:
 
         f.write(
             upload.getbuffer()
@@ -150,6 +151,7 @@ if upload:
     st.success(
         "歌曲上傳完成"
     )
+
 
 
     # ==================================================
@@ -175,26 +177,27 @@ if upload:
     )
 
 
-    vocal_candidates = list(
+    vocals = list(
         BASE_DIR.glob(
             "separated/htdemucs/**/vocals.wav"
         )
     )
 
 
-    if not vocal_candidates:
+    if not vocals:
 
         raise Exception(
             "找不到 vocals.wav"
         )
 
 
-    vocal_wav = vocal_candidates[0]
+    vocal_wav = vocals[0]
 
 
     st.success(
         f"取得人聲: {vocal_wav}"
     )
+
 
 
     # ==================================================
@@ -223,8 +226,11 @@ if upload:
     st.success(
         "MIDI 完成"
     )
- # ==================================================
-    # 3 Melody Clean Pro
+
+
+
+    # ==================================================
+    # 3 Melody Clean
     # ==================================================
 
     st.subheader(
@@ -249,9 +255,7 @@ if upload:
     st.success(
         "旋律清理完成"
     )
-
-
-    # ==================================================
+ # ==================================================
     # 4 MIDI -> MusicXML
     # ==================================================
 
@@ -280,6 +284,7 @@ if upload:
     st.success(
         "MusicXML 建立完成"
     )
+
 
 
     # ==================================================
@@ -313,6 +318,7 @@ if upload:
     )
 
 
+
     # ==================================================
     # 6 Final Quantize
     # ==================================================
@@ -344,6 +350,7 @@ if upload:
     )
 
 
+
     # ==================================================
     # 7 Measure Check
     # ==================================================
@@ -369,7 +376,10 @@ if upload:
     st.success(
         "小節檢查完成"
     )
- # ==================================================
+
+
+
+    # ==================================================
     # 8 MusicXML -> Jianpu
     # ==================================================
 
@@ -378,81 +388,38 @@ if upload:
     )
 
 
-    # jianpu-ly 輸出目錄
-    # ==================================================
-# 8 MusicXML -> Jianpu
-# ==================================================
-
-st.subheader(
-    "🎵 8. MusicXML → Jianpu"
-)
-
-
-ly_file = job_dir / "jianpu.ly"
-
-
-cmd = [
-
-    PYTHON,
-
-    "-m",
-
-    "jianpu_ly",
-
-    str(final_xml)
-
-]
-
-
-with open(
-    ly_file,
-    "w",
-    encoding="utf-8"
-) as f:
-
-
-    result = subprocess.run(
-
-        cmd,
-
-        cwd=str(job_dir),
-
-        stdout=f,
-
-        stderr=subprocess.PIPE,
-
-        text=True
-
+    run_cmd(
+        [
+            PYTHON,
+            "-m",
+            "jianpu_ly",
+            str(final_xml)
+        ],
+        cwd=str(job_dir)
     )
 
 
-
-if result.returncode != 0:
-
-    raise Exception(
-
-        "jianpu-ly錯誤:\n"
-
-        +
-
-        result.stderr
-
+    ly_candidates = list(
+        job_dir.glob(
+            "*.ly"
+        )
     )
 
 
+    if not ly_candidates:
 
-if not ly_file.exists():
+        raise Exception(
+            "jianpu-ly 未產生 .ly\n\n"
+            "目前目錄:\n"
+            +
+            "\n".join(
+                os.listdir(job_dir)
+            )
+        )
 
-    raise Exception(
 
-        "jianpu-ly 未產生 jianpu.ly"
+    ly_file = ly_candidates[0]
 
-    )
-
-
-st.success(
-    f"產生 LilyPond: {ly_file}"
-)
 
     st.success(
         f"找到 LilyPond: {ly_file}"
@@ -473,36 +440,31 @@ st.success(
         [
             "lilypond",
             "-o",
-            str(job_dir / "jianpu"),
+            str(
+                job_dir / "jianpu"
+            ),
             str(ly_file)
         ],
-        cwd=ly_dir
+        cwd=str(job_dir)
     )
 
 
 
-    pdf_file = job_dir / "jianpu.pdf"
-
-
-
-    if not pdf_file.exists():
-
-        pdf_candidates = list(
-            job_dir.glob("*.pdf")
+    pdf_candidates = list(
+        job_dir.glob(
+            "*.pdf"
         )
+    )
 
 
-        if pdf_candidates:
-
-            pdf_file = pdf_candidates[0]
-
-
-
-    if not pdf_file.exists():
+    if not pdf_candidates:
 
         raise Exception(
             "LilyPond 未產生 PDF"
         )
+
+
+    pdf_file = pdf_candidates[0]
 
 
 
