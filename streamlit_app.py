@@ -6,11 +6,4 @@ st.set_page_config(
 )
 
 st.title("🎵 JianpuTool")
-
-st.success("Streamlit 部署成功！")
-
-st.write("""
-MP3 / WAV / MIDI → 簡譜 PDF
-
-目前首頁測試版本
-""")
+st.success("首頁測試成功")
