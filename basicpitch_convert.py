@@ -1,189 +1,33 @@
-
-
 import sys
-import os
-import traceback
+
+from basic_pitch.inference import predict
+from basic_pitch import ICASSP_2022_MODEL_PATH
 
 
-print("=" * 60)
-print("BasicPitch Converter")
-print("=" * 60)
-
-print("Python:")
-print(sys.executable)
-
-print("Version:")
-print(sys.version)
-
-print("=" * 60)
+from basic_pitch import inference
 
 
+def convert(audio, output):
 
-# ==========================
-# Test basic_pitch
-# ==========================
+    print("BasicPitch AI")
 
-try:
 
-    import basic_pitch
-
-    print(
-        "basic_pitch found:"
-    )
-
-    print(
-        basic_pitch.__file__
+    model_output = predict(
+        audio,
+        ICASSP_2022_MODEL_PATH
     )
 
 
-except Exception:
+    midi = model_output[1]
 
-    print(
-        "basic_pitch import failed"
-    )
-
-    traceback.print_exc()
-
-    sys.exit(1)
-
-
-
-try:
-
-    from basic_pitch.inference import predict
-
-    print(
-        "predict import OK"
+    midi.write(
+        output
     )
 
 
-except Exception:
+if __name__=="__main__":
 
-    print(
-        "predict import failed"
+    convert(
+        sys.argv[1],
+        sys.argv[2]
     )
-
-    traceback.print_exc()
-
-    sys.exit(1)
-
-
-
-print("=" * 60)
-
-
-
-# ==========================
-# Arguments
-# ==========================
-
-if len(sys.argv) < 3:
-
-    print(
-        "Usage:"
-    )
-
-    print(
-        "python basicpitch_convert.py input.wav output.mid"
-    )
-
-    sys.exit(1)
-
-
-
-input_audio = sys.argv[1]
-
-output_midi = sys.argv[2]
-
-
-
-print(
-    "Input:",
-    input_audio
-)
-
-print(
-    "Output:",
-    output_midi
-)
-
-
-
-if not os.path.exists(input_audio):
-
-    print(
-        "找不到輸入檔:"
-        ,
-        input_audio
-    )
-
-    sys.exit(1)
-
-
-
-# ==========================
-# Output folder
-# ==========================
-
-output_dir = os.path.dirname(
-    output_midi
-)
-
-if output_dir:
-
-    os.makedirs(
-        output_dir,
-        exist_ok=True
-    )
-
-
-
-# ==========================
-# BasicPitch
-# ==========================
-
-try:
-
-    print(
-        "開始 BasicPitch AI 分析..."
-    )
-
-
-    model_output, midi_data, note_events = predict(
-        input_audio
-    )
-
-
-    print(
-        "寫入 MIDI..."
-    )
-
-
-    midi_data.write(
-        output_midi
-    )
-
-
-    print("=" * 60)
-
-    print(
-        "完成 MIDI:"
-    )
-
-    print(
-        output_midi
-    )
-
-    print("=" * 60)
-
-
-
-except Exception:
-
-    print(
-        "BasicPitch 執行失敗"
-    )
-
-    traceback.print_exc()
-
-    sys.exit(1)
