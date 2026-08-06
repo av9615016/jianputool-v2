@@ -10,8 +10,6 @@ def separate_vocal(input_audio, output_dir):
 
 
     cmd = [
-        "python",
-        "-m",
         "demucs",
         "--two-stems=vocals",
         "-n",
@@ -28,13 +26,11 @@ def separate_vocal(input_audio, output_dir):
     )
 
 
-    print(result.stdout)
-
-
     if result.returncode != 0:
 
         return {
-            "error": result.stdout
+            "error":
+            result.stdout
         }
 
 
@@ -44,6 +40,14 @@ def separate_vocal(input_audio, output_dir):
         name,
         "vocals.wav"
     )
+
+
+    if not os.path.exists(vocal):
+
+        return {
+            "error":
+            f"找不到:{vocal}"
+        }
 
 
     return vocal
