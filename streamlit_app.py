@@ -64,7 +64,13 @@ if file:
             job
         )
 
+        if isinstance(vocal, dict):
 
+           st.error(
+             vocal["error"]
+           )
+
+           st.stop()
         st.write(
         "🎵 AI抓旋律"
         )
