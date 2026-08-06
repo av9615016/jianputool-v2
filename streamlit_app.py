@@ -155,10 +155,11 @@ if upload:
 
         result = subprocess.run(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True
         )
-
+        st.text(result.stdout)
 
         if result.returncode != 0:
 
