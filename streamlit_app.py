@@ -3,21 +3,20 @@ import os
 import uuid
 import subprocess
 import sys
-import shutil
 
 
-# ============================================================
+# =====================================================
 # Page
-# ============================================================
+# =====================================================
 
 st.set_page_config(
-    page_title="JianpuTool Professional MVP 2.3.1",
+    page_title="JianpuTool Professional MVP 2.3.2",
     page_icon="🎵"
 )
 
 
 st.title(
-    "🎵 JianpuTool Professional MVP 2.3.1"
+    "🎵 JianpuTool Professional MVP 2.3.2"
 )
 
 
@@ -25,20 +24,27 @@ st.write(
 """
 AI Vocal → MIDI → MusicXML → Jianpu PDF
 
-每次歌曲使用獨立工作目錄
-避免不同歌曲輸出相同 PDF
+Professional Pipeline:
+
+MP3/WAV
+↓
+BasicPitch AI
+↓
+Melody Preserve Pro
+↓
+MusicXML
+↓
+Safe Fix
+↓
+Measure Fix
+↓
+Jianpu PDF
 """
 )
 
 
 
-# ============================================================
-# Tools
-# ============================================================
-
-
 BASE_DIR="outputs"
-
 
 os.makedirs(
     BASE_DIR,
@@ -49,13 +55,11 @@ os.makedirs(
 
 def new_job():
 
-    job_id=str(
-        uuid.uuid4()
-    )
+    job=str(uuid.uuid4())
 
     folder=os.path.join(
         BASE_DIR,
-        job_id
+        job
     )
 
     os.makedirs(
@@ -95,9 +99,9 @@ def run(cmd):
 
 
 
-# ============================================================
+# =====================================================
 # Upload
-# ============================================================
+# =====================================================
 
 
 uploaded=st.file_uploader(
@@ -149,55 +153,9 @@ if uploaded:
 
 
 
-    # ========================================================
-    # 1 Vocal
-    # ========================================================
-
-
-    st.subheader(
-        "🎤 Vocal Separation"
-    )
-
-
-    vocal_file=os.path.join(
-        job_dir,
-        "vocal.wav"
-    )
-
-
-    if not os.path.exists(
-        vocal_file
-    ):
-
-
-        st.info(
-            "開始抽取人聲"
-        )
-
-
-        # 你的 Demucs 程式放這裡
-        #
-        # 範例:
-        #
-        # run([
-        # sys.executable,
-        # "-m",
-        # "demucs",
-        # input_file
-        # ])
-
-
-    else:
-
-        st.info(
-            "使用本歌曲 Vocal 快取"
-        )
-
-
-
-    # ========================================================
-    # 2 BasicPitch
-    # ========================================================
+    # =================================================
+    # BasicPitch
+    # =================================================
 
 
     st.subheader(
@@ -211,36 +169,24 @@ if uploaded:
     )
 
 
+    run([
 
-    if not os.path.exists(
+        sys.executable,
+
+        "basicpitch_convert.py",
+
+        input_file,
+
         midi_file
-    ):
 
-
-        run([
-
-            sys.executable,
-
-            "basicpitch_convert.py",
-
-            input_file,
-
-            midi_file
-
-        ])
-
-
-    else:
-
-        st.info(
-            "使用本歌曲 MIDI 快取"
-        )
+    ])
 
 
 
-    # ========================================================
-    # 3 Melody Preserve
-    # ========================================================
+
+    # =================================================
+    # Melody Preserve
+    # =================================================
 
 
     st.subheader(
@@ -268,9 +214,10 @@ if uploaded:
 
 
 
-    # ========================================================
-    # 4 MIDI XML
-    # ========================================================
+
+    # =================================================
+    # MIDI -> MusicXML
+    # =================================================
 
 
     st.subheader(
@@ -298,9 +245,10 @@ if uploaded:
 
 
 
-    # ========================================================
-    # 5 Safe Fix
-    # ========================================================
+
+    # =================================================
+    # Safe Fix
+    # =================================================
 
 
     st.subheader(
@@ -328,19 +276,45 @@ if uploaded:
 
 
 
-    # ========================================================
-    # 6 jianpu
-    # ========================================================
+
+    # =================================================
+    # Measure Fix NEW
+    # =================================================
+
+
+    st.subheader(
+        "🎼 Measure Quantize Fix"
+    )
+
+
+    final_xml=os.path.join(
+        job_dir,
+        "final.musicxml"
+    )
+
+
+    run([
+
+        sys.executable,
+
+        "jianpu_measure_fix.py",
+
+        fixed_xml,
+
+        final_xml
+
+    ])
+
+
+
+
+    # =================================================
+    # Jianpu
+    # =================================================
 
 
     st.subheader(
         "🎼 MusicXML → Jianpu"
-    )
-
-
-    ly_file=os.path.join(
-        job_dir,
-        "fixed.ly"
     )
 
 
@@ -352,13 +326,17 @@ if uploaded:
 
         "jianpu_ly",
 
-        fixed_xml
+        final_xml
 
     ])
 
 
 
+
     # 找 ly
+
+    ly_file=None
+
 
     for f in os.listdir(job_dir):
 
@@ -371,9 +349,18 @@ if uploaded:
 
 
 
-    # ========================================================
-    # 7 LilyPond PDF
-    # ========================================================
+    if ly_file is None:
+
+        raise Exception(
+            "找不到 ly"
+        )
+
+
+
+
+    # =================================================
+    # LilyPond
+    # =================================================
 
 
     st.subheader(
@@ -398,59 +385,43 @@ if uploaded:
 
 
 
-    pdf_file=os.path.join(
+    pdf=os.path.join(
         job_dir,
         "jianpu.pdf"
     )
 
 
 
-    if os.path.exists(
-        pdf_file
-    ):
+    if os.path.exists(pdf):
 
 
         st.success(
-            "完成"
+            "🎉 完成"
         )
 
 
         st.download_button(
 
-            "⬇️ 下載簡譜 PDF",
+            "⬇️下載簡譜 PDF",
 
             open(
-                pdf_file,
+                pdf,
                 "rb"
             ),
 
-            file_name=
-            "jianpu.pdf",
+            file_name="jianpu.pdf",
 
-            mime=
-            "application/pdf"
+            mime="application/pdf"
 
         )
-
 
     else:
 
         st.error(
-            "找不到 PDF"
+            "PDF不存在"
         )
 
 
-
-    # Debug
-
-    st.write(
-        "---"
-    )
-
-    st.write(
-        "Input:",
-        input_file
-    )
 
     st.write(
         "MIDI:",
@@ -458,11 +429,11 @@ if uploaded:
     )
 
     st.write(
-        "XML:",
-        fixed_xml
+        "MusicXML:",
+        final_xml
     )
 
     st.write(
         "PDF:",
-        pdf_file
+        pdf
     )
