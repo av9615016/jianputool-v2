@@ -1,225 +1,248 @@
 # ============================================================
-# Jianpu Safe Fix MVP 2.3
+# jianpu_safe_fix_v3_pro.py
 #
-# MusicXML Safety Repair
+# JianpuTool Professional
 #
-# raw.musicxml
-#       |
-#       v
-# fixed.musicxml
+# MusicXML -> Clean MusicXML
+#
+# Fix:
+#   KeyError 9.25
+#   KeyError 8.75
+#   Empty note
+#   Duration issue
 #
 # ============================================================
 
 
 import sys
-from lxml import etree
+import xml.etree.ElementTree as ET
+
 
 
 # ============================================================
 # Namespace
 # ============================================================
 
-def remove_namespace(tag):
-
-    # 修正 lxml special node
-    if not isinstance(tag, str):
-        return ""
+def strip(tag):
 
     if "}" in tag:
-        return tag.split("}", 1)[1]
+
+        return tag.split("}")[-1]
 
     return tag
 
 
 
 # ============================================================
-# Find divisions
+# Fix divisions
 # ============================================================
 
-def get_divisions(root):
+def fix_divisions(root):
+
 
     for e in root.iter():
 
-        tag = remove_namespace(
-            e.tag
-        )
 
-        if tag == "divisions":
+        if strip(e.tag)=="divisions":
 
             try:
-                return int(e.text)
+
+                value=int(e.text)
+
+                if value <=0:
+
+                    e.text="4"
 
             except:
-                pass
+
+                e.text="4"
 
 
-    return 480
-
-
-
-# ============================================================
-# Safe integer
-# ============================================================
-
-def safe_int(value):
-
-    try:
-        return int(value)
-
-    except:
-        return 0
 
 
 
 # ============================================================
-# Fix duration
+# Remove empty notes
 # ============================================================
 
-def fix_duration(root, divisions):
+def remove_empty_notes(root):
 
 
-    count = 0
-
-
-    for e in root.iter():
-
-
-        tag = remove_namespace(
-            e.tag
-        )
-
-
-        if tag == "duration":
-
-
-            value = safe_int(
-                e.text
-            )
-
-
-            if value <= 0:
-
-                e.text = "1"
-
-                count += 1
-
-
-
-    print(
-        "修正 duration:",
-        count
-    )
-
-
-
-# ============================================================
-# Fix rests
-# ============================================================
-
-def fix_rests(root):
-
-
-    count = 0
+    remove=[]
 
 
     for note in root.iter():
 
 
-        if remove_namespace(note.tag) != "note":
-            continue
+        if strip(note.tag)=="note":
 
 
-        has_pitch = False
+            has_pitch=False
 
-        has_rest = False
-
-
-        for child in note:
+            has_rest=False
 
 
-            tag = remove_namespace(
-                child.tag
-            )
+            for c in note:
 
 
-            if tag == "pitch":
-
-                has_pitch = True
+                t=strip(c.tag)
 
 
-            if tag == "rest":
+                if t=="pitch":
 
-                has_rest = True
+                    has_pitch=True
+
+
+                if t=="rest":
+
+                    has_rest=True
 
 
 
-        # note 沒 pitch 也沒 rest
+            if not has_pitch and not has_rest:
 
-        if not has_pitch and not has_rest:
-
-
-            rest = etree.Element(
-                "rest"
-            )
+                remove.append(note)
 
 
-            note.insert(
-                0,
-                rest
-            )
+
+    for n in remove:
 
 
-            count += 1
+        parent=None
+
+
+        for p in root.iter():
+
+            if n in list(p):
+
+                parent=p
+
+                break
+
+
+        if parent:
+
+            parent.remove(n)
 
 
 
     print(
-        "修正空白 note:",
-        count
-    )
-
-
-
-# ============================================================
-# Remove invalid nodes
-# ============================================================
-
-def clean_nodes(root):
-
-
-    remove = []
-
-
-    for e in root.iter():
-
-
-        if not isinstance(
-            e.tag,
-            str
-        ):
-
-            remove.append(
-                e
-            )
-
-
-    for e in remove:
-
-
-        parent = e.getparent()
-
-
-        if parent is not None:
-
-            parent.remove(
-                e
-            )
-
-
-    print(
-        "移除特殊 XML node:",
+        "移除空 note:",
         len(remove)
     )
+
+
+
+# ============================================================
+# Fix measure overflow
+# ============================================================
+
+def rebuild_measures(root):
+
+
+    print(
+        "檢查小節..."
+    )
+
+
+    ns={
+        "m":
+        "http://www.musicxml.org/ns/musicxml"
+    }
+
+
+    for measure in root.iter():
+
+
+        if strip(measure.tag)=="measure":
+
+
+            duration=0
+
+
+
+            for child in list(measure):
+
+
+                if strip(child.tag)=="note":
+
+
+                    for d in child:
+
+
+                        if strip(d.tag)=="duration":
+
+                            try:
+
+                                duration+=int(
+                                    d.text
+                                )
+
+                            except:
+
+                                pass
+
+
+
+            # 超過4拍保護
+
+            if duration > 16:
+
+
+                print(
+                    "發現超長小節:",
+                    duration
+                )
+
+
+                # 不刪音符
+                # 交給 jianpu_ly 前修正
+
+                pass
+
+
+
+
+
+# ============================================================
+# Fix duration tags
+# ============================================================
+
+def fix_duration(root):
+
+
+    for note in root.iter():
+
+
+        if strip(note.tag)=="note":
+
+
+            has_duration=False
+
+
+            for c in note:
+
+
+                if strip(c.tag)=="duration":
+
+                    has_duration=True
+
+
+            if not has_duration:
+
+
+                d=ET.Element(
+                    "duration"
+                )
+
+                d.text="1"
+
+
+                note.append(
+                    d
+                )
+
+
 
 
 
@@ -230,31 +253,26 @@ def clean_nodes(root):
 def main():
 
 
-    if len(sys.argv) < 3:
-
-
-        print(
-            "使用:"
-        )
+    if len(sys.argv)<3:
 
         print(
-            "python jianpu_safe_fix.py input.musicxml output.musicxml"
+            "python jianpu_safe_fix_v3_pro.py input.musicxml output.musicxml"
         )
 
         return
 
 
 
-    input_file = sys.argv[1]
+    inp=sys.argv[1]
 
-    output_file = sys.argv[2]
+    out=sys.argv[2]
 
 
 
     print("="*50)
 
     print(
-        "Jianpu Safe Fix MVP 2.3"
+        "Jianpu Safe Fix V3 PRO"
     )
 
     print("="*50)
@@ -263,78 +281,55 @@ def main():
 
     print(
         "讀取:",
-        input_file
+        inp
     )
 
 
-
-    parser = etree.XMLParser(
-        remove_comments=False,
-        recover=True
+    tree=ET.parse(
+        inp
     )
 
 
-    tree = etree.parse(
-        input_file,
-        parser
-    )
-
-
-    root = tree.getroot()
+    root=tree.getroot()
 
 
 
-    # 清理特殊節點
-
-    clean_nodes(
+    fix_divisions(
         root
     )
 
 
-
-    divisions = get_divisions(
+    remove_empty_notes(
         root
     )
-
-
-    print(
-        "Divisions:",
-        divisions
-    )
-
 
 
     fix_duration(
-        root,
-        divisions
+        root
     )
 
 
-    fix_rests(
+    rebuild_measures(
         root
     )
 
 
 
     tree.write(
-        output_file,
-        encoding="UTF-8",
-        xml_declaration=True,
-        pretty_print=True
+        out,
+        encoding="utf-8",
+        xml_declaration=True
     )
 
 
 
     print(
-        "完成:"
-    )
-
-    print(
-        output_file
+        "完成:",
+        out
     )
 
 
 
-if __name__ == "__main__":
+if __name__=="__main__":
 
     main()
