@@ -1,80 +1,34 @@
-# ============================================================
-# JianpuTool Professional MVP 2.2.2
-#
-# MP3/WAV
-#   ↓
-# Demucs Vocal Separation
-#   ↓
-# BasicPitch AI Melody
-#   ↓
-# Melody Clean Pro
-#   ↓
-# MIDI → MusicXML
-#   ↓
-# Jianpu Safe Fix
-#   ↓
-# Final Quantize
-#   ↓
-# Jianpu-ly
-#   ↓
-# LilyPond PDF
-#
-# Streamlit Cloud Absolute Path Edition
-# ============================================================
-
 import streamlit as st
 import os
 import sys
 import uuid
 import subprocess
 import shutil
+from pathlib import Path
 
 
-# ============================================================
-# BASE PATH FIX
-# ============================================================
-
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
-
-
-OUTPUT_DIR = os.path.join(
-    BASE_DIR,
-    "outputs"
-)
-
-
-os.makedirs(
-    OUTPUT_DIR,
-    exist_ok=True
-)
-
-
-# ============================================================
-# PAGE
-# ============================================================
+# ==================================================
+# Page
+# ==================================================
 
 st.set_page_config(
-    page_title="JianpuTool Professional MVP 2.2.2",
-    page_icon="🎵"
+    page_title="JianpuTool Professional MVP 2.2.3",
+    page_icon="🎵",
+    layout="centered"
 )
 
 
-st.title(
-    "🎵 JianpuTool Professional MVP 2.2.2"
-)
-
+st.title("🎵 JianpuTool Professional MVP 2.2.3")
 
 st.write(
 """
-AI Vocal → MIDI → MusicXML → 簡譜 PDF
+AI Vocal → MIDI → MusicXML → Jianpu PDF
 
-Professional Pipeline:
+Pipeline:
 
 MP3/WAV
 ↓
-🎤 Vocal Separation
+🎤 Demucs Vocal Separation
 ↓
 🎼 BasicPitch AI Melody
 ↓
@@ -82,33 +36,48 @@ MP3/WAV
 ↓
 📄 MusicXML
 ↓
-🎵 Jianpu PDF
+🎵 Jianpu-ly
+↓
+🎼 LilyPond PDF
 """
 )
 
 
+# ==================================================
+# Path
+# ==================================================
 
-# ============================================================
-# RUN COMMAND
-# ============================================================
+BASE_DIR = Path(__file__).parent.resolve()
 
-def run(cmd):
+OUTPUT_DIR = BASE_DIR / "outputs"
+
+OUTPUT_DIR.mkdir(
+    exist_ok=True
+)
+
+
+PYTHON = sys.executable
+
+
+# ==================================================
+# Run command
+# ==================================================
+
+def run_cmd(cmd, cwd=None):
 
     st.code(
-        " ".join(cmd)
+        " ".join(str(x) for x in cmd)
     )
 
     result = subprocess.run(
         cmd,
+        cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True
     )
 
-    st.text(
-        result.stdout
-    )
-
+    st.text(result.stdout)
 
     if result.returncode != 0:
 
@@ -116,13 +85,35 @@ def run(cmd):
             result.stdout
         )
 
+    return result.stdout
 
 
-# ============================================================
-# UPLOAD
-# ============================================================
 
-uploaded = st.file_uploader(
+# ==================================================
+# Find file
+# ==================================================
+
+def find_file(folder, ext):
+
+    folder = Path(folder)
+
+    files = list(
+        folder.glob(ext)
+    )
+
+    if len(files):
+
+        return files[0]
+
+    return None
+
+
+
+# ==================================================
+# Upload
+# ==================================================
+
+upload = st.file_uploader(
     "上傳歌曲 MP3 / WAV",
     type=[
         "mp3",
@@ -131,38 +122,28 @@ uploaded = st.file_uploader(
 )
 
 
-
-if uploaded:
-
-
-    job_id = str(uuid.uuid4())
+if upload:
 
 
-    workdir = os.path.join(
-        OUTPUT_DIR,
-        job_id
+    job_id = str(
+        uuid.uuid4()
     )
 
 
-    os.makedirs(
-        workdir,
+    job_dir = OUTPUT_DIR / job_id
+
+    job_dir.mkdir(
         exist_ok=True
     )
 
 
-    input_file = os.path.join(
-        workdir,
-        "input" + os.path.splitext(uploaded.name)[1]
-    )
+    input_file = job_dir / upload.name
 
 
-    with open(
-        input_file,
-        "wb"
-    ) as f:
+    with open(input_file,"wb") as f:
 
         f.write(
-            uploaded.getbuffer()
+            upload.getbuffer()
         )
 
 
@@ -171,181 +152,129 @@ if uploaded:
     )
 
 
-    # ========================================================
-    # 1 VOCAL SEPARATION
-    # ========================================================
+    # ==================================================
+    # 1 Demucs
+    # ==================================================
 
     st.subheader(
         "🎤 1. Vocal Separation"
     )
 
 
-    run([
-
-        sys.executable,
-
-        "-m",
-        "demucs",
-
-        "--two-stems=vocals",
-
-        "-n",
-        "htdemucs",
-
-        input_file
-
-    ])
-
-
-
-    # Demucs output
-
-    song_name = os.path.splitext(
-        os.path.basename(input_file)
-    )[0]
-
-
-    vocal_file = os.path.join(
-
-        BASE_DIR,
-
-        "separated",
-
-        "htdemucs",
-
-        song_name,
-
-        "vocals.wav"
-
+    run_cmd(
+        [
+            PYTHON,
+            "-m",
+            "demucs",
+            "--two-stems=vocals",
+            "-n",
+            "htdemucs",
+            str(input_file)
+        ],
+        cwd=BASE_DIR
     )
 
 
-    if not os.path.exists(vocal_file):
+    vocal_candidates = list(
+        BASE_DIR.glob(
+            "separated/htdemucs/**/vocals.wav"
+        )
+    )
 
-        # Cloud path fallback
 
-        vocal_file = os.path.join(
+    if not vocal_candidates:
 
-            BASE_DIR,
-
-            "separated",
-
-            "htdemucs",
-
-            os.path.splitext(
-                os.path.basename(input_file)
-            )[0],
-
-            "vocals.wav"
-
+        raise Exception(
+            "找不到 vocals.wav"
         )
 
 
-    st.write(
-        "取得人聲:",
-        vocal_file
+    vocal_wav = vocal_candidates[0]
+
+
+    st.success(
+        f"取得人聲: {vocal_wav}"
     )
 
 
-    # ========================================================
-    # 2 BASIC PITCH
-    # ========================================================
+    # ==================================================
+    # 2 BasicPitch
+    # ==================================================
 
     st.subheader(
         "🎼 2. BasicPitch AI Melody"
     )
 
 
-    midi_file = os.path.join(
-        workdir,
-        "vocal.mid"
+    vocal_mid = job_dir / "vocal.mid"
+
+
+    run_cmd(
+        [
+            PYTHON,
+            str(BASE_DIR / "basicpitch_convert.py"),
+            str(vocal_wav),
+            str(vocal_mid)
+        ],
+        cwd=BASE_DIR
     )
-
-
-    run([
-
-        sys.executable,
-
-        os.path.join(
-            BASE_DIR,
-            "basicpitch_convert.py"
-        ),
-
-        vocal_file,
-
-        midi_file
-
-    ])
 
 
     st.success(
         "MIDI 完成"
     )
-
-
-    # ========================================================
-    # 3 MELODY CLEAN
-    # ========================================================
+ # ==================================================
+    # 3 Melody Clean Pro
+    # ==================================================
 
     st.subheader(
         "🎹 3. Melody Clean Pro"
     )
 
 
-    clean_mid = os.path.join(
-        workdir,
-        "vocal_clean.mid"
+    vocal_clean = job_dir / "vocal_clean.mid"
+
+
+    run_cmd(
+        [
+            PYTHON,
+            str(BASE_DIR / "melody_clean_pro.py"),
+            str(vocal_mid),
+            str(vocal_clean)
+        ],
+        cwd=BASE_DIR
     )
-
-
-    run([
-
-        sys.executable,
-
-        os.path.join(
-            BASE_DIR,
-            "melody_clean_pro.py"
-        ),
-
-        midi_file,
-
-        clean_mid
-
-    ])
 
 
     st.success(
         "旋律清理完成"
     )
-  # ========================================================
-    # 4 MIDI → MUSICXML
-    # ========================================================
+
+
+    # ==================================================
+    # 4 MIDI -> MusicXML
+    # ==================================================
 
     st.subheader(
         "🎼 4. MIDI → MusicXML"
     )
 
 
-    raw_xml = os.path.join(
-        workdir,
-        "raw.musicxml"
+    raw_xml = job_dir / "raw.musicxml"
+
+
+    run_cmd(
+        [
+            PYTHON,
+            str(
+                BASE_DIR /
+                "midi_to_musicxml_clean_v42_2_pro.py"
+            ),
+            str(vocal_clean),
+            str(raw_xml)
+        ],
+        cwd=BASE_DIR
     )
-
-
-    run([
-
-        sys.executable,
-
-        os.path.join(
-            BASE_DIR,
-            "midi_to_musicxml_clean.py"
-        ),
-
-        clean_mid,
-
-        raw_xml
-
-    ])
 
 
     st.success(
@@ -353,68 +282,61 @@ if uploaded:
     )
 
 
-
-    # ========================================================
-    # 5 JIANPU SAFE FIX
-    # ========================================================
+    # ==================================================
+    # 5 Jianpu Safe Fix
+    # ==================================================
 
     st.subheader(
         "🛠 5. Jianpu Safe Fix"
     )
 
 
-    fixed_xml = os.path.join(
-        workdir,
-        "fixed.musicxml"
+    fixed_xml = job_dir / "fixed.musicxml"
+
+
+    run_cmd(
+        [
+            PYTHON,
+            str(
+                BASE_DIR /
+                "jianpu_safe_fix.py"
+            ),
+            str(raw_xml),
+            str(fixed_xml)
+        ],
+        cwd=BASE_DIR
     )
 
 
-    run([
-
-        sys.executable,
-
-        os.path.join(
-            BASE_DIR,
-            "jianpu_safe_fix.py"
-        ),
-
-        raw_xml,
-
-        fixed_xml
-
-    ])
+    st.success(
+        "MusicXML 修正完成"
+    )
 
 
-
-    # ========================================================
-    # 6 FINAL QUANTIZE
-    # ========================================================
+    # ==================================================
+    # 6 Final Quantize
+    # ==================================================
 
     st.subheader(
         "⏱ 6. Final Quantize"
     )
 
 
-    final_xml = os.path.join(
-        workdir,
-        "final.musicxml"
+    final_xml = job_dir / "final.musicxml"
+
+
+    run_cmd(
+        [
+            PYTHON,
+            str(
+                BASE_DIR /
+                "final_quantize.py"
+            ),
+            str(fixed_xml),
+            str(final_xml)
+        ],
+        cwd=BASE_DIR
     )
-
-
-    run([
-
-        sys.executable,
-
-        os.path.join(
-            BASE_DIR,
-            "final_quantize.py"
-        ),
-
-        fixed_xml,
-
-        final_xml
-
-    ])
 
 
     st.success(
@@ -422,135 +344,162 @@ if uploaded:
     )
 
 
-
-    # ========================================================
-    # CHECK FILE
-    # ========================================================
-
-    if not os.path.exists(final_xml):
-
-        raise Exception(
-            "final.musicxml 不存在"
-        )
-
-
-
-    # ========================================================
-    # 7 MEASURE CHECK
-    # ========================================================
+    # ==================================================
+    # 7 Measure Check
+    # ==================================================
 
     st.subheader(
         "🔍 7. Measure Check"
     )
 
 
-    run([
-
-        sys.executable,
-
-        os.path.join(
-            BASE_DIR,
-            "check_measure.py"
-        ),
-
-        final_xml
-
-    ])
-
+    run_cmd(
+        [
+            PYTHON,
+            str(
+                BASE_DIR /
+                "check_measure.py"
+            ),
+            str(final_xml)
+        ],
+        cwd=BASE_DIR
+    )
 
 
-    # ========================================================
-    # 8 JIANPU-LY
-    # ========================================================
+    st.success(
+        "小節檢查完成"
+    )
+ # ==================================================
+    # 8 MusicXML -> Jianpu
+    # ==================================================
 
     st.subheader(
         "🎵 8. MusicXML → Jianpu"
     )
 
 
-    #
-    # jianpu-ly 必須在檔案目錄執行
-    #
-
-    old_dir = os.getcwd()
+    # jianpu-ly 輸出目錄
+    ly_dir = job_dir
 
 
-    os.chdir(workdir)
-
-
-    try:
-
-        run([
-
-            sys.executable,
-
+    run_cmd(
+        [
+            PYTHON,
             "-m",
-
             "jianpu_ly",
-
-            "final.musicxml"
-
-        ])
-
-
-    finally:
-
-        os.chdir(old_dir)
-
-
-
-    ly_file = os.path.join(
-        workdir,
-        "backup.ly"
+            str(final_xml)
+        ],
+        cwd=ly_dir
     )
 
 
-    if not os.path.exists(ly_file):
+    # ==================================================
+    # 自動尋找 .ly
+    # ==================================================
+
+    ly_file = None
+
+
+    search_list = [
+
+        ly_dir / "backup.ly",
+
+        ly_dir / "final.ly",
+
+        ly_dir / "final.musicxml.ly",
+
+        ly_dir / "jianpu.ly"
+
+    ]
+
+
+    for f in search_list:
+
+        if f.exists():
+
+            ly_file = f
+
+            break
+
+
+
+    # 找不到固定名稱時
+    if ly_file is None:
+
+        ly_candidates = list(
+            ly_dir.glob("*.ly")
+        )
+
+
+        if ly_candidates:
+
+            ly_file = ly_candidates[0]
+
+
+
+    if ly_file is None:
 
         raise Exception(
-            "jianpu-ly 未產生 backup.ly"
+            "jianpu-ly 未產生 .ly\n"
+            "目前目錄:\n"
+            +
+            "\n".join(
+                os.listdir(ly_dir)
+            )
         )
 
 
 
     st.success(
-        "Jianpu LilyPond 完成"
+        f"找到 LilyPond: {ly_file}"
     )
 
 
 
-    # ========================================================
-    # 9 LILYPOND PDF
-    # ========================================================
+    # ==================================================
+    # 9 LilyPond PDF
+    # ==================================================
 
     st.subheader(
-        "📄 9. LilyPond PDF"
-    )
-    check_lilypond_braces(
-    ly_file
-    )
-
-    run([
-
-        "lilypond",
-
-        ly_file
-
-    ])
-
-
-
-    pdf_file = os.path.join(
-        workdir,
-        "backup.pdf"
+        "🎼 9. LilyPond PDF"
     )
 
 
-    if not os.path.exists(pdf_file):
+    run_cmd(
+        [
+            "lilypond",
+            "-o",
+            str(job_dir / "jianpu"),
+            str(ly_file)
+        ],
+        cwd=ly_dir
+    )
+
+
+
+    pdf_file = job_dir / "jianpu.pdf"
+
+
+
+    if not pdf_file.exists():
+
+        pdf_candidates = list(
+            job_dir.glob("*.pdf")
+        )
+
+
+        if pdf_candidates:
+
+            pdf_file = pdf_candidates[0]
+
+
+
+    if not pdf_file.exists():
 
         raise Exception(
-            "PDF 產生失敗"
+            "LilyPond 未產生 PDF"
         )
+
 
 
     st.success(
@@ -559,9 +508,9 @@ if uploaded:
 
 
 
-    # ========================================================
-    # DOWNLOAD
-    # ========================================================
+    # ==================================================
+    # Download
+    # ==================================================
 
     with open(
         pdf_file,
@@ -570,18 +519,11 @@ if uploaded:
 
 
         st.download_button(
-
             label="⬇️ 下載簡譜 PDF",
-
             data=f,
-
             file_name="jianpu.pdf",
-
             mime="application/pdf"
-
         )
 
 
-    st.info(
-        f"輸出位置: {pdf_file}"
-    )
+    st.balloons()
