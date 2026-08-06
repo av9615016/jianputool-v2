@@ -1,26 +1,3 @@
-# streamlit_app.py
-#
-# JianpuTool MVP 1.2.4
-#
-# MP3 / WAV / MIDI
-#        ↓
-# BasicPitch
-#        ↓
-# MIDI
-#        ↓
-# midi_to_musicxml_clean V32.1
-#        ↓
-# clean_musicxml
-#        ↓
-# jianpu_fix_musicxml
-#        ↓
-# jianpu-ly
-#        ↓
-# LilyPond
-#        ↓
-# Jianpu PDF
-
-
 import streamlit as st
 import os
 import uuid
@@ -39,9 +16,7 @@ st.set_page_config(
 )
 
 
-st.title(
-    "🎵 JianpuTool MVP 1.2.4"
-)
+st.title("🎵 JianpuTool MVP 1.2.4")
 
 
 st.write(
@@ -70,19 +45,17 @@ PDF
 
 
 # ==========================
-# Directory
+# Path
 # ==========================
 
 BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
 
-
 OUTPUT_DIR = os.path.join(
     BASE_DIR,
     "outputs"
 )
-
 
 os.makedirs(
     OUTPUT_DIR,
@@ -90,9 +63,8 @@ os.makedirs(
 )
 
 
-
 # ==========================
-# Command
+# Execute
 # ==========================
 
 def run_command(cmd):
@@ -101,7 +73,6 @@ def run_command(cmd):
         " ".join(cmd)
     )
 
-
     result = subprocess.run(
         cmd,
         stdout=subprocess.PIPE,
@@ -109,14 +80,11 @@ def run_command(cmd):
         text=True
     )
 
-
     st.text(
         result.stdout
     )
 
-
     if result.returncode != 0:
-
         raise Exception(
             result.stdout
         )
@@ -141,15 +109,12 @@ uploaded = st.file_uploader(
 
 if uploaded:
 
-
     job_id = str(uuid.uuid4())[:8]
-
 
     workdir = os.path.join(
         OUTPUT_DIR,
         job_id
     )
-
 
     os.makedirs(
         workdir,
@@ -177,7 +142,6 @@ if uploaded:
         f"上傳完成: {uploaded.name}"
     )
 
-
     st.info(
         f"工作目錄: {workdir}"
     )
@@ -187,7 +151,8 @@ if uploaded:
 
 
     try:
-  # ==========================
+
+        # ==========================
         # Audio → MIDI
         # ==========================
 
@@ -198,17 +163,15 @@ if uploaded:
 
             midi_file = input_file
 
-
-            st.success(
+            st.info(
                 "使用 MIDI 輸入"
             )
 
 
         else:
 
-
             st.info(
-                "🎧 Audio → MIDI (BasicPitch)"
+                "🎧 BasicPitch Audio → MIDI"
             )
 
 
@@ -231,18 +194,18 @@ if uploaded:
             )
 
 
-            if not os.path.exists(
-                midi_file
-            ):
+        if not os.path.exists(
+            midi_file
+        ):
 
-                raise Exception(
-                    "MIDI 產生失敗"
-                )
-
-
-            st.success(
-                "MIDI 完成"
+            raise Exception(
+                "MIDI 產生失敗"
             )
+
+
+        st.success(
+            "MIDI 完成"
+        )
 
 
 
@@ -255,7 +218,7 @@ if uploaded:
         )
 
 
-        raw_musicxml = os.path.join(
+        raw_xml = os.path.join(
             workdir,
             "raw.musicxml"
         )
@@ -265,7 +228,7 @@ if uploaded:
             sys.executable,
             "midi_to_musicxml_clean.py",
             midi_file,
-            raw_musicxml
+            raw_xml
         ]
 
 
@@ -274,41 +237,27 @@ if uploaded:
         )
 
 
-        if not os.path.exists(
-            raw_musicxml
-        ):
-
-            raise Exception(
-                "MusicXML 產生失敗"
-            )
-
-
-        st.success(
-            "raw MusicXML 完成"
-        )
-
-
 
         # ==========================
-        # clean_musicxml
+        # Clean MusicXML
         # ==========================
 
-        st.info(
-            "🧹 MusicXML 清理"
-        )
-
-
-        clean_musicxml = os.path.join(
+        clean_xml = os.path.join(
             workdir,
             "clean.musicxml"
+        )
+
+
+        st.info(
+            "🧹 Clean MusicXML"
         )
 
 
         cmd = [
             sys.executable,
             "clean_musicxml.py",
-            raw_musicxml,
-            clean_musicxml
+            raw_xml,
+            clean_xml
         ]
 
 
@@ -317,41 +266,27 @@ if uploaded:
         )
 
 
-        if not os.path.exists(
-            clean_musicxml
-        ):
-
-            raise Exception(
-                "clean MusicXML 失敗"
-            )
-
-
-        st.success(
-            "MusicXML Clean 完成"
-        )
-
-
 
         # ==========================
-        # jianpu_fix_musicxml
+        # Jianpu Fix
         # ==========================
 
-        st.info(
-            "🎵 Jianpu MusicXML 修正"
-        )
-
-
-        final_musicxml = os.path.join(
+        final_xml = os.path.join(
             workdir,
             "final.musicxml"
+        )
+
+
+        st.info(
+            "🎵 Jianpu MusicXML Fix"
         )
 
 
         cmd = [
             sys.executable,
             "jianpu_fix_musicxml.py",
-            clean_musicxml,
-            final_musicxml
+            clean_xml,
+            final_xml
         ]
 
 
@@ -360,204 +295,9 @@ if uploaded:
         )
 
 
-        if not os.path.exists(
-            final_musicxml
-        ):
-
-            raise Exception(
-                "final MusicXML 產生失敗"
-            )
-
-
-        st.success(
-            "final M  # ==========================
-        # Audio → MIDI
-        # ==========================
-
-        if ext in [
-            "mid",
-            "midi"
-        ]:
-
-            midi_file = input_file
-
-
-            st.success(
-                "使用 MIDI 輸入"
-            )
-
-
-        else:
-
-
-            st.info(
-                "🎧 Audio → MIDI (BasicPitch)"
-            )
-
-
-            midi_file = os.path.join(
-                workdir,
-                "audio.mid"
-            )
-
-
-            cmd = [
-                sys.executable,
-                "basicpitch_convert.py",
-                input_file,
-                midi_file
-            ]
-
-
-            run_command(
-                cmd
-            )
-
-
-            if not os.path.exists(
-                midi_file
-            ):
-
-                raise Exception(
-                    "MIDI 產生失敗"
-                )
-
-
-            st.success(
-                "MIDI 完成"
-            )
-
-
 
         # ==========================
-        # MIDI → MusicXML
-        # ==========================
-
-        st.info(
-            "🎼 MIDI → MusicXML"
-        )
-
-
-        raw_musicxml = os.path.join(
-            workdir,
-            "raw.musicxml"
-        )
-
-
-        cmd = [
-            sys.executable,
-            "midi_to_musicxml_clean.py",
-            midi_file,
-            raw_musicxml
-        ]
-
-
-        run_command(
-            cmd
-        )
-
-
-        if not os.path.exists(
-            raw_musicxml
-        ):
-
-            raise Exception(
-                "MusicXML 產生失敗"
-            )
-
-
-        st.success(
-            "raw MusicXML 完成"
-        )
-
-
-
-        # ==========================
-        # clean_musicxml
-        # ==========================
-
-        st.info(
-            "🧹 MusicXML 清理"
-        )
-
-
-        clean_musicxml = os.path.join(
-            workdir,
-            "clean.musicxml"
-        )
-
-
-        cmd = [
-            sys.executable,
-            "clean_musicxml.py",
-            raw_musicxml,
-            clean_musicxml
-        ]
-
-
-        run_command(
-            cmd
-        )
-
-
-        if not os.path.exists(
-            clean_musicxml
-        ):
-
-            raise Exception(
-                "clean MusicXML 失敗"
-            )
-
-
-        st.success(
-            "MusicXML Clean 完成"
-        )
-
-
-
-        # ==========================
-        # jianpu_fix_musicxml
-        # ==========================
-
-        st.info(
-            "🎵 Jianpu MusicXML 修正"
-        )
-
-
-        final_musicxml = os.path.join(
-            workdir,
-            "final.musicxml"
-        )
-
-
-        cmd = [
-            sys.executable,
-            "jianpu_fix_musicxml.py",
-            clean_musicxml,
-            final_musicxml
-        ]
-
-
-        run_command(
-            cmd
-        )
-
-
-        if not os.path.exists(
-            final_musicxml
-        ):
-
-            raise Exception(
-                "final MusicXML 產生失敗"
-            )
-
-
-        st.success(
-            "final MusicXML 完成"
-        )usicXML 完成"
-        )
- # ==========================
-        # MusicXML → jianpu.ly
+        # jianpu-ly
         # ==========================
 
         st.info(
@@ -569,7 +309,7 @@ if uploaded:
             sys.executable,
             "-m",
             "jianpu_ly",
-            final_musicxml
+            final_xml
         ]
 
 
@@ -577,8 +317,6 @@ if uploaded:
             cmd
         )
 
-
-        # 找出 .ly
 
         ly_file = None
 
@@ -595,22 +333,16 @@ if uploaded:
                 break
 
 
-
         if ly_file is None:
 
             raise Exception(
-                "找不到 jianpu.ly"
+                "找不到 .ly 檔案"
             )
-
-
-        st.success(
-            "jianpu.ly 完成"
-        )
 
 
 
         # ==========================
-        # LilyPond PDF
+        # LilyPond
         # ==========================
 
         st.info(
@@ -618,16 +350,13 @@ if uploaded:
         )
 
 
-        pdf_output = os.path.join(
-            workdir,
-            "jianpu"
-        )
-
-
         cmd = [
             "lilypond",
             "-o",
-            pdf_output,
+            os.path.join(
+                workdir,
+                "jianpu"
+            ),
             ly_file
         ]
 
@@ -635,7 +364,6 @@ if uploaded:
         run_command(
             cmd
         )
-
 
 
         pdf_file = os.path.join(
@@ -653,25 +381,20 @@ if uploaded:
             )
 
 
+
         st.success(
             "🎉 簡譜 PDF 完成!"
         )
 
-
-
-        # ==========================
-        # Download
-        # ==========================
 
         with open(
             pdf_file,
             "rb"
         ) as f:
 
-
             st.download_button(
-                label="⬇️ 下載簡譜 PDF",
-                data=f,
+                "⬇️ 下載簡譜 PDF",
+                f,
                 file_name="jianpu.pdf",
                 mime="application/pdf"
             )
