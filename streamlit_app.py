@@ -4,7 +4,6 @@ import uuid
 import subprocess
 import sys
 import zipfile
-import shutil
 
 from vocal_separator import separate_vocal
 
@@ -17,6 +16,7 @@ st.set_page_config(
     page_title="JianpuTool AI 音樂助手",
     page_icon="🎵"
 )
+
 
 st.title(
     "🎵 JianpuTool AI 音樂助手"
@@ -32,8 +32,21 @@ st.write(
 📄 自動簡譜
 🎹 MIDI輸出
 🎼 PDF樂譜
-📦 ZIP下載
+📦 ZIP一次下載
 """
+)
+
+
+# ==========================
+# Output Folder
+# ==========================
+
+OUTPUT_ROOT = "outputs"
+
+
+os.makedirs(
+    OUTPUT_ROOT,
+    exist_ok=True
 )
 
 
@@ -59,7 +72,7 @@ if upload:
 
 
     base_dir = os.path.join(
-        "outputs",
+        OUTPUT_ROOT,
         job_id
     )
 
@@ -112,7 +125,6 @@ if upload:
 
         try:
 
-
             vocal = separate_vocal(
                 input_file,
                 base_dir
@@ -126,7 +138,6 @@ if upload:
 
 
         except Exception as e:
-
 
             st.error(
                 f"Demucs失敗:{e}"
@@ -153,6 +164,7 @@ if upload:
             base_dir,
             "melody.mid"
         )
+
 
 
         result = subprocess.run(
@@ -188,6 +200,7 @@ if upload:
 
 
 
+
         # ======================
         # MIDI -> MusicXML
         # ======================
@@ -201,7 +214,6 @@ if upload:
             base_dir,
             "score.musicxml"
         )
-
 
 
         result = subprocess.run(
@@ -253,8 +265,7 @@ if upload:
         )
 
 
-
-        result = subprocess.run(
+        pdf_result = subprocess.run(
             [
                 sys.executable,
                 "jianpu_pdf.py",
@@ -268,12 +279,11 @@ if upload:
 
 
         st.text(
-            result.stdout
+            pdf_result.stdout
         )
 
 
-
-        if result.returncode != 0:
+        if pdf_result.returncode != 0:
 
             st.warning(
                 "PDF產生失敗"
@@ -289,7 +299,6 @@ if upload:
         # ZIP
         # ======================
 
-
         zip_file = os.path.join(
             base_dir,
             "JianpuTool_result.zip"
@@ -303,7 +312,7 @@ if upload:
         ) as z:
 
 
-            files = [
+            output_files = [
 
                 (
                     midi_file,
@@ -323,7 +332,7 @@ if upload:
             ]
 
 
-            for src,name in files:
+            for src,name in output_files:
 
 
                 if os.path.isfile(src):
@@ -342,76 +351,58 @@ if upload:
 
 
         # ======================
-        # Download MIDI
+        # Downloads
         # ======================
 
-        if os.path.isfile(midi_file):
 
+        if os.path.isfile(midi_file):
 
             with open(
                 midi_file,
                 "rb"
             ) as f:
 
-
                 st.download_button(
                     "🎹 下載 MIDI",
                     f,
-                    file_name="melody.mid",
-                    mime="audio/midi"
+                    "melody.mid",
+                    "audio/midi"
                 )
 
 
 
-
-        # ======================
-        # Download MusicXML
-        # ======================
-
-
         if os.path.isfile(musicxml_file):
-
 
             with open(
                 musicxml_file,
                 "rb"
             ) as f:
 
-
                 st.download_button(
                     "🎼 下載 MusicXML",
                     f,
-                    file_name="score.musicxml",
-                    mime="application/xml"
+                    "score.musicxml",
+                    "application/xml"
                 )
 
 
 
-
-        # ======================
-        # Download PDF
-        # ======================
-
-
         if os.path.isfile(pdf_file):
-
 
             with open(
                 pdf_file,
                 "rb"
             ) as f:
 
-
                 st.download_button(
                     "📄 下載簡譜 PDF",
                     f,
-                    file_name="jianpu.pdf",
-                    mime="application/pdf"
+                    "jianpu.pdf",
+                    "application/pdf"
                 )
 
 
         else:
-
 
             st.warning(
                 "沒有PDF檔"
@@ -419,24 +410,16 @@ if upload:
 
 
 
-
-        # ======================
-        # Download ZIP
-        # ======================
-
-
         if os.path.isfile(zip_file):
-
 
             with open(
                 zip_file,
                 "rb"
             ) as f:
 
-
                 st.download_button(
                     "📦 一次下載全部 ZIP",
                     f,
-                    file_name="JianpuTool_result.zip",
-                    mime="application/zip"
+                    "JianpuTool_result.zip",
+                    "application/zip"
                 )
