@@ -310,14 +310,21 @@ if upload:
             pdf_file
         ):
 
-            with open(
-                pdf_file,
-                "rb"
-            ) as f:
+if os.path.isfile(pdf_file):
 
-                st.download_button(
-                    "📄 下載簡譜 PDF",
-                    f,
-                    file_name="jianpu.pdf"
-                )
+    with open(
+        pdf_file,
+        "rb"
+    ) as f:
 
+        st.download_button(
+            "📄 下載簡譜 PDF",
+            f,
+            file_name="jianpu.pdf"
+        )
+
+else:
+
+    st.error(
+        "PDF產生失敗，沒有找到 jianpu.pdf"
+    )
