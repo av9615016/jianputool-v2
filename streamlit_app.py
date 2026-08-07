@@ -385,62 +385,16 @@ if upload:
             st.error(
                 "PDF沒有產生，請檢查 jianpu_pdf.py / LilyPond"
             )
-# =====================
-# ZIP 一次下載全部
-# =====================
+       # =====================
+       # 📦 ZIP下載按鈕
+       # =====================
 
-zip_file = os.path.join(
-    job,
-    "JianpuTool_result.zip"
-)
+       if os.path.isfile(zip_file):
 
-
-with zipfile.ZipFile(
-    zip_file,
-    "w",
-    zipfile.ZIP_DEFLATED
-) as z:
-
-
-    # MIDI
-
-    if os.path.isfile(midi_file):
-
-        z.write(
-            midi_file,
-            arcname="melody.mid"
-        )
-
-
-    # MusicXML
-
-    if os.path.isfile(musicxml_file):
-
-        z.write(
-            musicxml_file,
-            arcname="score.musicxml"
-        )
-
-
-    # PDF
-
-    if os.path.isfile(pdf_file):
-
-        z.write(
-            pdf_file,
-            arcname="jianpu.pdf"
-        )
-
-
-# 顯示下載按鈕
-
-if os.path.isfile(zip_file):
-
-    with open(
+        with open(
         zip_file,
         "rb"
-    ) as f:
-
+        ) as f:
 
         st.download_button(
 
