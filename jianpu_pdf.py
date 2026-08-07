@@ -5,12 +5,18 @@ import shutil
 
 
 # ==================================
-# JianpuTool PDF Generator V2
+# JianpuTool PDF Generator V3
 # MusicXML -> Jianpu -> LilyPond -> PDF
 # ==================================
 
 
 def run_cmd(cmd):
+
+    print(
+        "執行:",
+        " ".join(cmd)
+    )
+
 
     result = subprocess.run(
         cmd,
@@ -19,19 +25,20 @@ def run_cmd(cmd):
         text=True
     )
 
-    print(result.stdout)
+
+    print(
+        result.stdout
+    )
+
 
     if result.returncode != 0:
 
         raise Exception(
-            "\n".join(
-                [
-                    "Command failed:",
-                    " ".join(cmd),
-                    result.stdout
-                ]
-            )
+            result.stdout
         )
+
+
+    return result
 
 
 
@@ -50,29 +57,47 @@ def create_pdf(
     )
 
 
+    # -------------------------------
+    # 絕對路徑修正
+    # -------------------------------
+
+    musicxml_file = os.path.abspath(
+        musicxml_file
+    )
+
+
+    pdf_file = os.path.abspath(
+        pdf_file
+    )
+
+
+
     if not os.path.isfile(
         musicxml_file
     ):
 
         raise Exception(
-            "找不到 MusicXML:"
-            + musicxml_file
+            "找不到 MusicXML: "
+            +
+            musicxml_file
         )
 
 
 
-    # ------------------------------
-    # Output folder
-    # ------------------------------
+    print(
+        "MusicXML:",
+        musicxml_file
+    )
+
+
+
+    # -------------------------------
+    # 建立輸出資料夾
+    # -------------------------------
 
     pdf_dir = os.path.dirname(
         pdf_file
     )
-
-
-    if pdf_dir == "":
-
-        pdf_dir = "."
 
 
     os.makedirs(
@@ -81,10 +106,6 @@ def create_pdf(
     )
 
 
-
-    # ------------------------------
-    # Temporary jianpu folder
-    # ------------------------------
 
     work_dir = os.path.join(
         pdf_dir,
@@ -98,20 +119,15 @@ def create_pdf(
     )
 
 
-    ly_file = os.path.join(
-        work_dir,
-        "score.ly"
-    )
 
-
-
-    # ------------------------------
+    # -------------------------------
     # jianpu-ly
-    # ------------------------------
+    # -------------------------------
 
     print(
         "轉換 jianpu-ly..."
     )
+
 
 
     result = subprocess.run(
@@ -133,7 +149,9 @@ def create_pdf(
     )
 
 
+
     if result.returncode != 0:
+
 
         raise Exception(
             "jianpu-ly失敗\n"
@@ -143,12 +161,14 @@ def create_pdf(
 
 
 
-    # 找 ly
+    # -------------------------------
+    # 找 .ly
+    # -------------------------------
 
-    found = None
+    ly_file = None
 
 
-    for root,dirs,files in os.walk(
+    for root, dirs, files in os.walk(
         work_dir
     ):
 
@@ -158,42 +178,37 @@ def create_pdf(
                 ".ly"
             ):
 
-                found = os.path.join(
+                ly_file = os.path.join(
                     root,
                     f
                 )
 
+                break
 
-    if found is None:
+
+
+    if ly_file is None:
+
 
         raise Exception(
-            "找不到 .ly 檔"
-        )
-
-
-    if found != ly_file:
-
-        shutil.copy(
-            found,
-            ly_file
+            "找不到 LilyPond .ly"
         )
 
 
 
     print(
-        "LilyPond:"
-        ,
+        "LY:",
         ly_file
     )
 
 
 
-    # ------------------------------
+    # -------------------------------
     # LilyPond
-    # ------------------------------
+    # -------------------------------
 
     print(
-        "產生 PDF..."
+        "LilyPond 編譯..."
     )
 
 
@@ -201,6 +216,7 @@ def create_pdf(
         pdf_dir,
         "jianpu"
     )
+
 
 
     run_cmd(
@@ -214,13 +230,18 @@ def create_pdf(
 
 
 
-    generated_pdf = output_base + ".pdf"
+    generated_pdf = (
+        output_base
+        +
+        ".pdf"
+    )
 
 
 
     if not os.path.isfile(
         generated_pdf
     ):
+
 
         raise Exception(
             "LilyPond沒有產生PDF"
@@ -236,9 +257,10 @@ def create_pdf(
 
 
     print(
-        "完成:",
+        "PDF完成:",
         pdf_file
     )
+
 
 
 
@@ -257,11 +279,9 @@ if __name__ == "__main__":
             "使用:"
         )
 
-
         print(
             "python jianpu_pdf.py input.musicxml output.pdf"
         )
-
 
         sys.exit(1)
 
