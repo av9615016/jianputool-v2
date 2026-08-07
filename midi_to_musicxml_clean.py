@@ -1,4 +1,5 @@
 import sys
+import math
 
 from music21 import (
     converter,
@@ -6,18 +7,20 @@ from music21 import (
     note,
     chord,
     meter,
-    tempo
+    tempo,
+    tie
 )
 
 
 # =====================================
-# JianpuTool MIDI → MusicXML V34
+# JianpuTool MIDI → MusicXML V35
+# Melody Stable Version
 # =====================================
 
 
-# -------------------------------
-# 讀取 MIDI
-# -------------------------------
+# =====================================
+# MIDI 讀取
+# =====================================
 
 def extract_notes(mid):
 
@@ -33,29 +36,35 @@ def extract_notes(mid):
     for n in score.recurse():
 
 
+        # 單音
+
         if isinstance(n, note.Note):
+
 
             notes.append(
                 (
                     n.pitch.midi,
-                    n.offset,
-                    n.duration.quarterLength
+                    float(n.offset),
+                    float(n.duration.quarterLength)
                 )
             )
 
 
+        # 和弦取最高音
+
         elif isinstance(n, chord.Chord):
 
-            p = max(
+
+            pitch = max(
                 n.pitches
             ).midi
 
 
             notes.append(
                 (
-                    p,
-                    n.offset,
-                    n.duration.quarterLength
+                    pitch,
+                    float(n.offset),
+                    float(n.duration.quarterLength)
                 )
             )
 
@@ -70,21 +79,24 @@ def extract_notes(mid):
 
 
 
-# -------------------------------
-# 音域過濾
-# -------------------------------
+
+# =====================================
+# 人聲音域
+# =====================================
 
 def filter_range(notes):
 
-    result=[]
+
+    result = []
 
 
     for p,o,d in notes:
 
 
-        # 人聲範圍
+        # 女聲/男聲共同範圍
 
-        if 45 <= p <= 90:
+        if 45 <= p <= 95:
+
 
             result.append(
                 (
@@ -106,11 +118,28 @@ def filter_range(notes):
 
 
 
-# -------------------------------
+# =====================================
+# 節奏量化
+# =====================================
+
+def quantize(value):
+
+
+    # 1/4 beat 格
+
+    return round(
+        value * 4
+    ) / 4
+
+
+
+
+# =====================================
 # 去除重複
-# -------------------------------
+# =====================================
 
 def remove_duplicate(notes):
+
 
     result=[]
 
@@ -159,11 +188,12 @@ def remove_duplicate(notes):
 
 
 
-# -------------------------------
-# Phrase Merge
-# -------------------------------
+# =====================================
+# Phrase Merge + Rhythm Fix
+# =====================================
 
 def phrase_merge(notes):
+
 
     result=[]
 
@@ -171,9 +201,27 @@ def phrase_merge(notes):
     for p,o,d in notes:
 
 
+        # 修正時間
+
+        o = quantize(o)
+
+        d = quantize(d)
+
+
+
+        # 最短16分音符
+
         if d < 0.25:
 
-            d=0.25
+            d = 0.25
+
+
+
+        # 最大不要超過4拍
+
+        if d > 4:
+
+            d = 4
 
 
 
@@ -186,6 +234,7 @@ def phrase_merge(notes):
         )
 
 
+
     print(
         "Phrase Merge:",
         len(result)
@@ -193,19 +242,12 @@ def phrase_merge(notes):
 
 
     return result
-
-
-
-
-
 # =====================================
-# 重建4/4小節
-# 修復 jianpu-ly KeyError
+# 安全4/4小節重建
+# 避免 jianpu-ly barcheck fail
 # =====================================
-
 
 def rebuild_measures(score):
-
 
     print(
         "重新建立4/4小節..."
@@ -215,19 +257,10 @@ def rebuild_measures(score):
     new_score = stream.Score()
 
 
-
     for part in score.parts:
 
 
         new_part = stream.Part()
-
-
-
-        elements = list(
-            part.flatten()
-            .notesAndRests
-        )
-
 
 
         measure = stream.Measure(
@@ -239,15 +272,38 @@ def rebuild_measures(score):
 
 
 
-        for el in elements:
+        for el in part.flatten().notesAndRests:
 
 
-            length = (
-                el.duration
-                .quarterLength
+            length = float(
+                el.duration.quarterLength
             )
 
 
+            # 節奏安全化
+
+            length = quantize(
+                length
+            )
+
+
+            if length <= 0:
+
+                continue
+
+
+
+            # 超過小節直接切斷
+
+            if length > 4:
+
+                length = 4
+
+                el.duration.quarterLength = length
+
+
+
+            # 跨小節處理
 
             if current + length > 4:
 
@@ -255,15 +311,14 @@ def rebuild_measures(score):
                 remain = 4-current
 
 
-
                 if remain > 0:
+
 
                     measure.append(
                         note.Rest(
                             quarterLength=remain
                         )
                     )
-
 
 
                 new_part.append(
@@ -281,6 +336,16 @@ def rebuild_measures(score):
 
 
 
+            # 移除 tie
+
+            if hasattr(el, "tie"):
+
+                el.tie = None
+
+
+
+            el.duration.quarterLength = length
+
 
             measure.append(
                 el
@@ -292,17 +357,24 @@ def rebuild_measures(score):
 
 
 
-        # 最後補滿
+        # 最後補滿4拍
 
         if current < 4:
 
 
-            measure.append(
-                note.Rest(
-                    quarterLength=
-                    4-current
-                )
+            remain = quantize(
+                4-current
             )
+
+
+            if remain >= 0.25:
+
+
+                measure.append(
+                    note.Rest(
+                        quarterLength=remain
+                    )
+                )
 
 
 
@@ -368,8 +440,9 @@ def create_musicxml(
         )
 
 
-        n.duration.quarterLength = d
-
+        n.duration.quarterLength = quantize(
+            d
+        )
 
 
         part.insert(
@@ -417,7 +490,7 @@ def create_musicxml(
 def main():
 
 
-    if len(sys.argv)<3:
+    if len(sys.argv) < 3:
 
 
         print(
@@ -434,15 +507,15 @@ def main():
 
 
 
-    midi = sys.argv[1]
+    midi_file = sys.argv[1]
 
 
-    output = sys.argv[2]
+    output_file = sys.argv[2]
 
 
 
     notes = extract_notes(
-        midi
+        midi_file
     )
 
 
@@ -464,7 +537,7 @@ def main():
 
     create_musicxml(
         notes,
-        output
+        output_file
     )
 
 
