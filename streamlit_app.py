@@ -1,9 +1,9 @@
-import zipfile
 import streamlit as st
 import os
 import uuid
 import subprocess
 import sys
+import zipfile
 
 from vocal_separator import separate_vocal
 
@@ -385,25 +385,24 @@ if upload:
             st.error(
                 "PDF沒有產生，請檢查 jianpu_pdf.py / LilyPond"
             )
-       # =====================
-       # 📦 ZIP下載按鈕
-       # =====================
+    # ======================
+    # 📦 ZIP下載
+    # ======================
 
-       if os.path.isfile(zip_file):
+    if os.path.isfile(
+        zip_file
+    ):
+
 
         with open(
-        zip_file,
-        "rb"
+            zip_file,
+            "rb"
         ) as f:
 
-        st.download_button(
 
-            label="📦 一次下載全部 (ZIP)",
-
-            data=f,
-
-            file_name="JianpuTool_result.zip",
-
-            mime="application/zip"
-
-        )
+            st.download_button(
+                "📦 一次下載全部 (ZIP)",
+                f,
+                file_name="JianpuTool_result.zip",
+                mime="application/zip"
+            )
