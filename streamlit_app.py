@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import os
 import uuid
@@ -321,4 +320,4 @@ if upload:
                     f,
                     file_name="jianpu.pdf"
                 )
-```
+
