@@ -1,12 +1,15 @@
 import sys
-import os
-from music21 import converter, stream, note, chord, meter, tempo
+from music21 import converter, stream, note, meter, tempo
 
 
-# ===============================
-# Melody Extractor V33
-# ===============================
+# =====================================
+# JianpuTool MIDI → MusicXML V34
+# =====================================
 
+
+# -------------------------------
+# 讀取 MIDI
+# -------------------------------
 
 def extract_notes(mid):
 
@@ -28,9 +31,8 @@ def extract_notes(mid):
                 )
             )
 
-        elif isinstance(n, chord.Chord):
+        elif n.isChord:
 
-            # 取最高音當旋律
             p = max(n.pitches).midi
 
             notes.append(
@@ -48,10 +50,9 @@ def extract_notes(mid):
 
 
 
-# ===============================
-# 音域過濾
-# ===============================
-
+# -------------------------------
+# 人聲音域
+# -------------------------------
 
 def filter_range(notes):
 
@@ -59,7 +60,8 @@ def filter_range(notes):
 
     for p,o,d in notes:
 
-        # 人聲主要範圍
+        # 人聲常用範圍
+
         if 45 <= p <= 90:
 
             result.append(
@@ -73,10 +75,10 @@ def filter_range(notes):
 
 
 
-# ===============================
-# 去除時間重複
-# ===============================
 
+# -------------------------------
+# 去除重複音符
+# -------------------------------
 
 def remove_duplicate(notes):
 
@@ -85,9 +87,15 @@ def remove_duplicate(notes):
     last=None
 
 
-    for item in sorted(notes,key=lambda x:x[1]):
+    for item in sorted(
+        notes,
+        key=lambda x:x[1]
+    ):
 
-        key=(item[0],round(item[1],2))
+        key=(
+            item[0],
+            round(item[1],2)
+        )
 
 
         if key != last:
@@ -97,111 +105,186 @@ def remove_duplicate(notes):
             last=key
 
 
-    print("去除重複:",len(result))
+    print(
+        "去除重複:",
+        len(result)
+    )
+
 
     return result
 
 
 
-# ===============================
-# Phrase Merge
-# ===============================
 
+# -------------------------------
+# Phrase Merge
+# -------------------------------
 
 def phrase_merge(notes):
-
-    if not notes:
-        return notes
-
 
     result=[]
 
 
-    for n in notes:
-
-        p,o,d=n
+    for p,o,d in notes:
 
 
-        # 太短音合併
+        # 太短音修正
+
         if d < 0.25:
 
             d=0.25
 
 
         result.append(
-            (p,o,d)
+            (
+                p,
+                o,
+                d
+            )
         )
 
 
-    print("Phrase Merge:",len(result))
+    print(
+        "Phrase Merge:",
+        len(result)
+    )
+
 
     return result
 
 
 
 
-# ===============================
-# 修正小節長度
-# 解決 jianpu-ly KeyError 9.5
-# ===============================
+# =====================================
+# 重新建立 4/4 小節
+# 修復 jianpu-ly KeyError
+# =====================================
 
 
-def fix_measure(score):
+def rebuild_measures(score):
 
-    print("Measure Quantize...")
-
-
-    for m in score.parts[0].getElementsByClass("Measure"):
-
-
-        dur=m.duration.quarterLength
+    print(
+        "重新建立4/4小節..."
+    )
 
 
-        if dur < 4:
+    new_score=stream.Score()
 
 
-            rest_time=4-dur
+
+    for part in score.parts:
 
 
-            if rest_time>0:
+        new_part=stream.Part()
 
 
-                m.append(
-                    note.Rest(
-                        quarterLength=rest_time
+        elements=list(
+            part.flatten()
+            .notesAndRests
+        )
+
+
+        measure=stream.Measure(
+            number=1
+        )
+
+
+        current=0
+
+
+
+        for el in elements:
+
+
+            length=el.duration.quarterLength
+
+
+
+            # 超過4拍換小節
+
+            if current + length > 4:
+
+
+                remain=4-current
+
+
+                if remain > 0:
+
+                    measure.append(
+                        note.Rest(
+                            quarterLength=remain
+                        )
                     )
+
+
+                new_part.append(
+                    measure
                 )
 
 
-        elif dur > 4:
+                measure=stream.Measure(
+                    number=
+                    measure.number+1
+                )
 
 
-            print(
-                "修正小節:",
-                m.number,
-                dur
+                current=0
+
+
+
+            measure.append(el)
+
+
+            current += length
+
+
+
+
+        # 補滿最後小節
+
+        if current < 4:
+
+            measure.append(
+                note.Rest(
+                    quarterLength=4-current
+                )
             )
 
 
-    return score
+
+        new_part.append(
+            measure
+        )
+
+
+        new_score.append(
+            new_part
+        )
+
+
+    return new_score
 
 
 
-# ===============================
+
+
+# =====================================
 # 建立 MusicXML
-# ===============================
-
+# =====================================
 
 def create_musicxml(notes,out):
 
 
-    print("建立 MusicXML...")
+    print(
+        "建立 MusicXML..."
+    )
 
 
-    s=stream.Score()
+    score=stream.Score()
 
 
     part=stream.Part()
+
 
 
     part.append(
@@ -216,12 +299,15 @@ def create_musicxml(notes,out):
     )
 
 
+
     for p,o,d in notes:
 
 
         n=note.Note(p)
 
+
         n.duration.quarterLength=d
+
 
         part.insert(
             o,
@@ -229,32 +315,39 @@ def create_musicxml(notes,out):
         )
 
 
-    s.append(part)
+
+    score.append(part)
 
 
 
-    # 分小節
-    s=s.makeMeasures()
-
-
-    s=fix_measure(s)
+    score=score.makeMeasures()
 
 
 
-    s.write(
+    score=rebuild_measures(
+        score
+    )
+
+
+
+    score.write(
         "musicxml",
         fp=out
     )
 
 
-    print("完成:",out)
+    print(
+        "完成:",
+        out
+    )
 
 
 
 
-# ===============================
-# Main
-# ===============================
+
+# =====================================
+# 主程式
+# =====================================
 
 
 def main():
@@ -272,27 +365,38 @@ def main():
         return
 
 
+
     midi=sys.argv[1]
 
     output=sys.argv[2]
 
 
-    notes=extract_notes(midi)
+
+    notes=extract_notes(
+        midi
+    )
 
 
-    notes=filter_range(notes)
+    notes=filter_range(
+        notes
+    )
 
 
-    notes=remove_duplicate(notes)
+    notes=remove_duplicate(
+        notes
+    )
 
 
-    notes=phrase_merge(notes)
+    notes=phrase_merge(
+        notes
+    )
 
 
     create_musicxml(
         notes,
         output
     )
+
 
 
 
