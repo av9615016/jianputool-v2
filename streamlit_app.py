@@ -7,9 +7,9 @@ import sys
 from vocal_separator import separate_vocal
 
 
-# =========================
+# ==========================
 # Page
-# =========================
+# ==========================
 
 st.set_page_config(
     page_title="JianpuTool AI 音樂助手",
@@ -17,25 +17,28 @@ st.set_page_config(
 )
 
 
-st.title("🎵 JianpuTool AI 音樂助手")
+st.title(
+    "🎵 JianpuTool AI 音樂助手"
+)
 
 
 st.write(
 """
 功能：
 
-🎤 人聲分離  
-🎵 AI抓旋律  
-📄 自動簡譜  
-🎹 MIDI輸出  
+🎤 人聲分離
+🎵 AI抓旋律
+📄 自動簡譜
+🎹 MIDI輸出
 🎼 PDF樂譜
 """
 )
 
 
-# =========================
+
+# ==========================
 # Upload
-# =========================
+# ==========================
 
 upload = st.file_uploader(
     "上傳 MP3/WAV",
@@ -44,6 +47,7 @@ upload = st.file_uploader(
         "wav"
     ]
 )
+
 
 
 if upload:
@@ -89,9 +93,9 @@ if upload:
 
 
 
-        # =====================
+        # ======================
         # Demucs
-        # =====================
+        # ======================
 
         st.write(
             "🎤 人聲分離"
@@ -99,6 +103,7 @@ if upload:
 
 
         try:
+
 
             vocal = separate_vocal(
                 input_file,
@@ -116,7 +121,7 @@ if upload:
 
 
             st.error(
-                f"Demucs失敗:\n{e}"
+                f"Demucs失敗:{e}"
             )
 
             st.stop()
@@ -127,9 +132,9 @@ if upload:
 
 
 
-        # =====================
+        # ======================
         # BasicPitch
-        # =====================
+        # ======================
 
         st.write(
             "🎵 AI抓旋律"
@@ -174,9 +179,9 @@ if upload:
 
 
 
-        # =====================
+        # ======================
         # MIDI -> MusicXML
-        # =====================
+        # ======================
 
         st.write(
             "📄 自動簡譜"
@@ -218,22 +223,36 @@ if upload:
 
 
         progress.progress(70)
-
-
-
-        # =====================
-        # MusicXML -> PDF
-        # =====================
+ # ======================
+        # PDF
+        # ======================
 
         st.write(
             "🎼 PDF樂譜"
         )
 
 
-        pdf_file = os.path.join(
+        # 修正：
+        # pdf不能當資料夾
+        # 建立專用輸出目錄
+
+        pdf_dir = os.path.join(
             job,
+            "pdf"
+        )
+
+
+        os.makedirs(
+            pdf_dir,
+            exist_ok=True
+        )
+
+
+        pdf_file = os.path.join(
+            pdf_dir,
             "jianpu.pdf"
         )
+
 
 
         if os.path.exists(
@@ -261,9 +280,12 @@ if upload:
 
             if result.returncode != 0:
 
-                st.warning(
+                st.error(
                     "PDF產生失敗"
                 )
+
+                st.stop()
+
 
 
         else:
@@ -279,12 +301,15 @@ if upload:
 
 
 
-        # =====================
-        # Download
-        # =====================
+        st.success(
+            "🎉 製作完成"
+        )
 
-        st.divider()
 
+
+        # ======================
+        # Download MIDI
+        # ======================
 
         if os.path.isfile(
             midi_file
@@ -300,10 +325,15 @@ if upload:
                 st.download_button(
                     "🎹 下載 MIDI",
                     f,
-                    file_name="melody.mid"
+                    file_name="melody.mid",
+                    mime="audio/midi"
                 )
 
 
+
+        # ======================
+        # Download MusicXML
+        # ======================
 
         if os.path.isfile(
             musicxml_file
@@ -319,10 +349,15 @@ if upload:
                 st.download_button(
                     "🎼 下載 MusicXML",
                     f,
-                    file_name="score.musicxml"
+                    file_name="score.musicxml",
+                    mime="application/xml"
                 )
 
 
+
+        # ======================
+        # Download PDF
+        # ======================
 
         if os.path.isfile(
             pdf_file
@@ -338,18 +373,14 @@ if upload:
                 st.download_button(
                     "📄 下載簡譜 PDF",
                     f,
-                    file_name="jianpu.pdf"
+                    file_name="jianpu.pdf",
+                    mime="application/pdf"
                 )
-
-
-            st.success(
-                "🎉 製作完成"
-            )
 
 
         else:
 
 
             st.error(
-                "PDF沒有產生，請檢查 jianpu-ly / LilyPond 錯誤"
+                "PDF沒有產生，請檢查 jianpu_pdf.py / LilyPond"
             )
