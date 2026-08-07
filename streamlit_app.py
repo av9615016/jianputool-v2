@@ -18,9 +18,7 @@ st.set_page_config(
 )
 
 
-st.title(
-    "🎵 JianpuTool AI 音樂助手"
-)
+st.title("🎵 JianpuTool AI 音樂助手")
 
 
 st.write(
@@ -32,9 +30,9 @@ st.write(
 📄 自動簡譜
 🎹 MIDI輸出
 🎼 PDF樂譜
+📦 ZIP一次下載
 """
 )
-
 
 
 # ==========================
@@ -50,12 +48,9 @@ upload = st.file_uploader(
 )
 
 
-
 if upload:
 
-
     job = str(uuid.uuid4())
-
 
     os.makedirs(
         job,
@@ -105,7 +100,6 @@ if upload:
 
         try:
 
-
             vocal = separate_vocal(
                 input_file,
                 job
@@ -119,7 +113,6 @@ if upload:
 
 
         except Exception as e:
-
 
             st.error(
                 f"Demucs失敗:{e}"
@@ -224,7 +217,10 @@ if upload:
 
 
         progress.progress(70)
- # ======================
+
+
+
+        # ======================
         # PDF
         # ======================
 
@@ -233,73 +229,41 @@ if upload:
         )
 
 
-        # 修正：
-        # pdf不能當資料夾
-        # 建立專用輸出目錄
-
-        pdf_dir = os.path.join(
-            job,
-            "pdf"
-        )
-
-
-        os.makedirs(
-            pdf_dir,
-            exist_ok=True
-        )
-
-
         pdf_file = os.path.join(
-            pdf_dir,
+            job,
             "jianpu.pdf"
         )
 
 
+        result = subprocess.run(
+            [
+                sys.executable,
+                "jianpu_pdf.py",
+                musicxml_file,
+                pdf_file
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
 
-        if os.path.exists(
-            "jianpu_pdf.py"
-        ):
+
+        st.text(
+            result.stdout
+        )
 
 
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "jianpu_pdf.py",
-                    musicxml_file,
-                    pdf_file
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True
+        if result.returncode != 0:
+
+            st.error(
+                "PDF產生失敗"
             )
 
-
-            st.text(
-                result.stdout
-            )
-
-
-            if result.returncode != 0:
-
-                st.error(
-                    "PDF產生失敗"
-                )
-
-                st.stop()
-
-
-
-        else:
-
-
-            st.warning(
-                "找不到 jianpu_pdf.py"
-            )
+            st.stop()
 
 
 
         progress.progress(100)
-
 
 
         st.success(
@@ -309,19 +273,57 @@ if upload:
 
 
         # ======================
+        # ZIP
+        # ======================
+
+        zip_file = os.path.join(
+            job,
+            "JianpuTool_result.zip"
+        )
+
+
+        with zipfile.ZipFile(
+            zip_file,
+            "w",
+            zipfile.ZIP_DEFLATED
+        ) as z:
+
+
+            if os.path.isfile(midi_file):
+
+                z.write(
+                    midi_file,
+                    "melody.mid"
+                )
+
+
+            if os.path.isfile(musicxml_file):
+
+                z.write(
+                    musicxml_file,
+                    "score.musicxml"
+                )
+
+
+            if os.path.isfile(pdf_file):
+
+                z.write(
+                    pdf_file,
+                    "jianpu.pdf"
+                )
+
+
+
+        # ======================
         # Download MIDI
         # ======================
 
-        if os.path.isfile(
-            midi_file
-        ):
-
+        if os.path.isfile(midi_file):
 
             with open(
                 midi_file,
                 "rb"
             ) as f:
-
 
                 st.download_button(
                     "🎹 下載 MIDI",
@@ -336,16 +338,12 @@ if upload:
         # Download MusicXML
         # ======================
 
-        if os.path.isfile(
-            musicxml_file
-        ):
-
+        if os.path.isfile(musicxml_file):
 
             with open(
                 musicxml_file,
                 "rb"
             ) as f:
-
 
                 st.download_button(
                     "🎼 下載 MusicXML",
@@ -360,16 +358,12 @@ if upload:
         # Download PDF
         # ======================
 
-        if os.path.isfile(
-            pdf_file
-        ):
-
+        if os.path.isfile(pdf_file):
 
             with open(
                 pdf_file,
                 "rb"
             ) as f:
-
 
                 st.download_button(
                     "📄 下載簡譜 PDF",
@@ -379,30 +373,21 @@ if upload:
                 )
 
 
-        else:
 
+        # ======================
+        # Download ZIP
+        # ======================
 
-            st.error(
-                "PDF沒有產生，請檢查 jianpu_pdf.py / LilyPond"
-            )
-    # ======================
-    # 📦 ZIP下載
-    # ======================
+        if os.path.isfile(zip_file):
 
-    if os.path.isfile(
-        zip_file
-    ):
+            with open(
+                zip_file,
+                "rb"
+            ) as f:
 
-
-        with open(
-            zip_file,
-            "rb"
-        ) as f:
-
-
-            st.download_button(
-                "📦 一次下載全部 (ZIP)",
-                f,
-                file_name="JianpuTool_result.zip",
-                mime="application/zip"
-            )
+                st.download_button(
+                    "📦 一次下載全部 ZIP",
+                    f,
+                    file_name="JianpuTool_result.zip",
+                    mime="application/zip"
+                )
