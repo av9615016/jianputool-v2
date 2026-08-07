@@ -1,4 +1,4 @@
-import basic_pitch
+```python
 import streamlit as st
 import os
 import uuid
@@ -6,12 +6,11 @@ import subprocess
 import sys
 import shutil
 
-
 from vocal_separator import separate_vocal
 
 
 # =========================
-# 設定
+# Page
 # =========================
 
 st.set_page_config(
@@ -19,29 +18,24 @@ st.set_page_config(
     page_icon="🎵"
 )
 
-
-st.title(
-    "🎵 JianpuTool AI 音樂助手"
-)
-
+st.title("🎵 JianpuTool AI 音樂助手")
 
 st.write(
 """
 功能：
 
-🎤 人聲分離  
-🎵 AI抓旋律  
-📄 自動簡譜  
-🎹 MIDI輸出  
+🎤 人聲分離
+🎵 AI抓旋律
+📄 自動簡譜
+🎹 MIDI輸出
 🎼 PDF樂譜
 """
 )
 
 
 # =========================
-# 上傳
+# Upload
 # =========================
-
 
 upload = st.file_uploader(
     "上傳 MP3/WAV",
@@ -52,9 +46,7 @@ upload = st.file_uploader(
 )
 
 
-
 if upload:
-
 
     job = str(uuid.uuid4())
 
@@ -89,13 +81,11 @@ if upload:
         "開始製作簡譜"
     ):
 
-
         progress = st.progress(0)
 
 
-
         # =====================
-        # 人聲分離
+        # Demucs
         # =====================
 
         st.write(
@@ -111,6 +101,12 @@ if upload:
             )
 
 
+            st.write(
+                "取得人聲:",
+                vocal
+            )
+
+
         except Exception as e:
 
             st.error(
@@ -120,15 +116,13 @@ if upload:
             st.stop()
 
 
-
         progress.progress(25)
 
 
 
         # =====================
-        # BasicPitch MIDI
+        # BasicPitch
         # =====================
-
 
         st.write(
             "🎵 AI抓旋律"
@@ -142,15 +136,10 @@ if upload:
 
 
         cmd = [
-
             sys.executable,
-
             "basicpitch_convert.py",
-
             vocal,
-
             midi_file
-
         ]
 
 
@@ -160,16 +149,18 @@ if upload:
             stderr=subprocess.STDOUT,
             text=True
         )
+
+
         st.text(result.stdout)
+
 
         if result.returncode != 0:
 
             st.error(
-                result.stderr
+                "BasicPitch失敗"
             )
 
             st.stop()
-
 
 
         progress.progress(50)
@@ -177,30 +168,46 @@ if upload:
 
 
         # =====================
-        # MIDI MusicXML
+        # MIDI -> MusicXML
         # =====================
-
 
         st.write(
             "📄 自動簡譜"
         )
 
 
-        musicxml = os.path.join(
+        musicxml_file = os.path.join(
             job,
             "score.musicxml"
         )
 
 
-        subprocess.run(
-            [
-                sys.executable,
-                "midi_to_musicxml_clean.py",
-                midi_file,
-                musicxml_file
-            ],
-            check=True
+        cmd = [
+            sys.executable,
+            "midi_to_musicxml_clean.py",
+            midi_file,
+            musicxml_file
+        ]
+
+
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
         )
+
+
+        st.text(result.stdout)
+
+
+        if result.returncode != 0:
+
+            st.error(
+                "MusicXML產生失敗"
+            )
+
+            st.stop()
 
 
         progress.progress(70)
@@ -208,9 +215,8 @@ if upload:
 
 
         # =====================
-        # Jianpu PDF
+        # PDF
         # =====================
-
 
         st.write(
             "🎼 PDF樂譜"
@@ -223,23 +229,33 @@ if upload:
         )
 
 
-        try:
+        if os.path.exists(
+            "jianpu_pdf.py"
+        ):
 
-            subprocess.run(
-                [
-                    "python",
-                    "jianpu_pdf.py",
-                    musicxml,
-                    pdf_file
-                ],
-                check=True
+            cmd = [
+                sys.executable,
+                "jianpu_pdf.py",
+                musicxml_file,
+                pdf_file
+            ]
+
+
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True
             )
 
 
-        except Exception as e:
+            st.text(result.stdout)
+
+
+        else:
 
             st.warning(
-                f"PDF產生失敗:{e}"
+                "找不到 jianpu_pdf.py，跳過PDF"
             )
 
 
@@ -252,16 +268,14 @@ if upload:
         )
 
 
-
         # =====================
-        # 下載
+        # Download
         # =====================
 
 
         if os.path.exists(
             midi_file
         ):
-
 
             with open(
                 midi_file,
@@ -277,12 +291,11 @@ if upload:
 
 
         if os.path.exists(
-            musicxml
+            musicxml_file
         ):
 
-
             with open(
-                musicxml,
+                musicxml_file,
                 "rb"
             ) as f:
 
@@ -298,7 +311,6 @@ if upload:
             pdf_file
         ):
 
-
             with open(
                 pdf_file,
                 "rb"
@@ -309,3 +321,4 @@ if upload:
                     f,
                     file_name="jianpu.pdf"
                 )
+```
