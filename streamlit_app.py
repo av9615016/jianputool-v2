@@ -1,9 +1,9 @@
-import sys
 import basic_pitch
 import streamlit as st
 import os
 import uuid
 import subprocess
+import sys
 import shutil
 
 
@@ -194,10 +194,10 @@ if upload:
 
         subprocess.run(
             [
-                "python",
+                sys.executable,
                 "midi_to_musicxml_clean.py",
                 midi_file,
-                musicxml
+                musicxml_file
             ],
             check=True
         )
