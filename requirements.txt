@@ -18,4 +18,4 @@ jianpu-ly==1.872
 
 tensorflow==2.14.1
 
-setuptools>=70.0.0
+setuptools==69.5.1
