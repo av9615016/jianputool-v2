@@ -1,3 +1,4 @@
+import sys
 import basic_pitch
 import streamlit as st
 import os
@@ -142,7 +143,7 @@ if upload:
 
         cmd = [
 
-            "python",
+            sys.executable,
 
             "basicpitch_convert.py",
 
